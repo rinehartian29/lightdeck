@@ -433,6 +433,21 @@ const FX = [
 let beat = {env:0, idx:0, last:0};
 // music sync color: steps through your palette once per beat; 'offset' spreads lights / positions across it
 function musicColor(offset){ const pal=S.musicPal.map(hex2rgb), n=pal.length; return pal[((beat.idx+offset)%n+n)%n]; }
+// Lamps (matches the hub's musicLoudC): loudness picks the color, quiet = first music color, loud = last.
+// Every 16 beats (4 bars) the palette shifts one color along, blended over 1.5 s.
+const MUSIC_PHRASE = 16;
+let phrase = {idx:0, at:0};
+function musicShift(){
+  const ph = Math.floor(beat.idx / MUSIC_PHRASE), now = performance.now();
+  if (ph !== phrase.idx) { phrase.idx = ph; phrase.at = now; }
+  let q = Math.min(1, (now - phrase.at)/1500); q = q*q*(3-2*q);
+  return phrase.idx - 1 + q;
+}
+function musicLoudColor(x){
+  const pal=S.musicPal.map(hex2rgb), n=pal.length; if (n<2) return pal[0];
+  const u = Math.max(0,Math.min(1,x))*(n-1) + musicShift(), a = ((Math.floor(u)%n)+n)%n;
+  return mix(pal[a], pal[(a+1)%n], u-Math.floor(u));
+}
 const musicGrad = () => `repeating-linear-gradient(90deg,${S.musicPal.map((h,i)=>`#${h} ${i*8}px ${(i+1)*8}px`).join(',')})`;
 
 /* What light l shows at position p (0..1 along it) right now: [rgb, level 0..1] */
@@ -453,7 +468,11 @@ function lightAt(l, i, t, p=.5){
     if (S.fx==='fade')    c = hsv((t*18*sp)%360);
     if (S.fx==='candle')  { const n=noise(t*sp*1.6+i*9+p*6); c=[255,125+30*n,28]; lv *= .78+.22*n; }   // a calm glow (matches the hub)
     if (S.fx==='breathe') lv *= .22 + .78*(.5+.5*Math.sin(t*sp*1.5 + i*.8));
-    if (S.fx==='music')   { c = musicColor(i + Math.floor(p*S.musicPal.length*.999)); lv *= .12 + .88*beat.env; }
+    if (S.fx==='music') {                // full brightness range (master level), whatever the light's own brightness was (matches the hub)
+      const M = (S.master??100)/100;
+      if (l.type==='rgbic') { const fill=.12+.88*beat.env; c = musicLoudColor(p); lv = M*Math.max(0,Math.min(1,(fill+.07-p)/.14)); }   // level meter
+      else { c = musicLoudColor(beat.env); lv = M*(.06+.94*beat.env); }
+    }
   }
   return [c, Math.max(0,Math.min(1,lv))];
 }
@@ -813,7 +832,7 @@ function viewModes(){
     <div class="card">
       <div class="row"><span class="label">Music sync</span><span class="hint">${S.fx==='music'?'Listening · 120 BPM':'Off'}</span></div>
       <div class="meter" id="meter">${'<i></i>'.repeat(16)}</div>
-      <div class="row"><span>Colors</span><span class="hint">One step per beat</span></div>
+      <div class="row"><span>Colors</span><span class="hint">Quiet → loud · shifts every 4 bars</span></div>
       <div class="pal">${S.musicPal.map((h,i)=>`<div class="palc"><button class="b" data-mcol="${i}" style="background:#${h}" aria-label="Music color ${i+1}, #${h}">${S.musicPal.length>2?`<span class="x" data-mrem="${i}" role="button" aria-label="Remove music color ${i+1}">×</span>`:''}</button>${i+1}</div>`).join('')}
         ${S.musicPal.length<6?`<div class="palc"><button class="add" id="madd" aria-label="Add a music color">+</button>Add</div>`:''}</div>
       <div class="chips"><button class="chip" id="mknobs">Use knob A and B colors</button></div>
@@ -830,7 +849,7 @@ function viewModes(){
       ${micAllowedHere() ? `<div class="row"><b class="hint" id="micstat" aria-live="polite">${MIC.status || (MIC.stream?'Listening':'Not listening')}</b><button class="btn small primary" id="micbtn">${MIC.stream?'Stop listening':'Start listening'}</button></div>` : ''}
       <span class="hint" id="micnote">${!HUB.live ? 'Demo: the lights breathe at the tempo here.'
         : !window.isSecureContext ? 'The phone mic and laptop audio only work on the online copy of the app (your github.io address). Here the hub breathes the lights smoothly at the tempo above.'
-        : 'Brightness follows how loud the music is, and each beat fades to your next color. With the mic off, the hub breathes the lights at the tempo above. Keep this page open while listening.'}</span>
+        : 'Louder = brighter and further along your colors (quiet shows color 1, loud the last one); the desk strip fills like a level meter. Every 4 bars the colors shift along one step. With the mic off, the hub breathes the lights at the tempo above. Keep this page open while listening.'}</span>
     </div>
   </div>
   ${wl?`<div class="card">
@@ -1453,10 +1472,10 @@ function openDigit(d){
 function tick(ms){
   const t=ms/1000;
   if (S.fx==='music' || S.clock.fx==='music') {
-    const period=.5, ph=(t%period)/period;
+    const period=60/(S.bpm||120), ph=(t%period)/period;
     if (!MIC.stream && t-beat.last>=period) { beat.last=t-(t%period); beat.idx++; }
-    // preview: the mic's loudness when listening, otherwise a smooth breath (no flashing)
-    beat.env = MIC.stream ? (MIC.loud||0) : .35+.65*(.5+.5*Math.cos(2*Math.PI*ph));
+    // preview: the mic's loudness when listening, otherwise a smooth breath at the tempo (matches the hub)
+    beat.env = MIC.stream ? (MIC.loud||0) : .25+.6*(.5+.5*Math.cos(2*Math.PI*ph));
     const m=$('#meter'); if(m) [...m.children].forEach((b,i)=>{ b.style.height=(Math.max(.04,beat.env*(.4+.6*Math.abs(Math.sin(i*1.3+t*6))))*100)+'%'; });
   }
   paint(t);
@@ -1817,18 +1836,21 @@ async function micStart(){
     MIC.src = S.musicSrc;
     MIC.an = MIC.ctx.createAnalyser(); MIC.an.fftSize = 1024; MIC.buf = new Float32Array(MIC.an.fftSize);
     MIC.ctx.createMediaStreamSource(new MediaStream(MIC.stream.getAudioTracks())).connect(MIC.an);
-    MIC.beats = 0; MIC.peak = 0.02; MIC.loud = 0; MIC.sendAt = 0; MIC.pendingBeat = false;
+    MIC.beats = 0; MIC.hiDb = undefined; MIC.loud = 0; MIC.sendAt = 0; MIC.pendingBeat = false;
     MIC.timer = setInterval(() => {                     // ~40 checks a second
       if (!MIC.an) return;
       if (MIC.ctx.state==='suspended') MIC.ctx.resume().catch(()=>{});
       MIC.an.getFloatTimeDomainData(MIC.buf);
       let e=0; for (let i=0;i<MIC.buf.length;i++) e+=MIC.buf[i]*MIC.buf[i];
       const rms = Math.sqrt(e/MIC.buf.length), now = performance.now();
-      // loudness 0..1, relative to the recent loudest moment (so it adapts to how loud the room is)
-      MIC.peak = Math.max(rms, MIC.peak*0.9985, 0.004);
-      const gain = 0.6 + S.sens/100*0.8;                // Sensitivity: how quickly it reaches full brightness
-      const target = Math.min(1, rms/MIC.peak*gain);
-      MIC.loud += (target - MIC.loud) * (target > MIC.loud ? 0.5 : 0.08);   // rises fast, settles slowly
+      // loudness 0..1 on a decibel scale between the recent loudest moment and a window below it, so even
+      // steady, loud music (like Spotify through laptop audio) swings clearly between dim and bright.
+      const db = 20*Math.log10(Math.max(rms, 1e-5));
+      MIC.hiDb = Math.max(db, (MIC.hiDb ?? db) - 0.015);          // the loudest recent level, easing down ~0.6 dB/s
+      const range = 26 - S.sens/100*14;                            // Sensitivity: higher = reaches full brightness sooner (26..12 dB window)
+      const norm = Math.max(0, Math.min(1, (db - (MIC.hiDb - range)) / range));
+      const target = norm*norm*(3 - 2*norm);                       // S-curve: quiet parts go dimmer, loud hits go brighter
+      MIC.loud += (target - MIC.loud) * (target > MIC.loud ? 0.5 : 0.12);   // rises fast, settles smoothly
       // beats (for stepping to the next color)
       MIC.avg = MIC.avg ? MIC.avg*0.97 + rms*0.03 : rms;
       const k = 1.7 - (S.sens/100)*0.7;
