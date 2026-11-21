@@ -1644,8 +1644,10 @@ async function hubLoad(){
 }
 // what a light should be showing (brightness includes the Mixer's master fader)
 function desiredOf(l){ return {on:!!l.on, bri:Math.max(1, Math.min(100, Math.round(l.bri*S.master/100))), c:l.c.map(v=>Math.round(v))}; }
+// signed in: at home with a token, or away from home with the relay key
+const hubReady = () => HUB.live && (HUB.remote ? !!RM.key : !!HUB.token);
 async function hubPoll(){
-  if (!HUB.live || !HUB.token) return;
+  if (!hubReady()) return;
   try {
     const st = await hubApi('/api/state'), now = Date.now();
     let sceneChanged = false;
@@ -1674,7 +1676,7 @@ async function hubPoll(){
     if (sceneChanged && !dragActive && !document.querySelector('#editorRoot .backdrop, #sheetRoot .backdrop')
         && !['INPUT','SELECT','TEXTAREA'].includes((document.activeElement||{}).tagName) && !S.editing) render();
     readouts();
-  } catch(e) { if (HUB.token) HUB.offline = true; }
+  } catch(e) { if (hubReady()) HUB.offline = true; }
   const nt=$('#nettext'); if (nt) nt.textContent = netText();
   const dot=$('header .dot'); if (dot) dot.style.background = HUB.offline ? 'var(--bad)' : 'var(--good)';
 }
@@ -1737,7 +1739,7 @@ function applyClockState(k){
 }
 // Send whatever differs from what each light last got (runs 6-7 times a second)
 function hubSync(){
-  if (!HUB.live || !HUB.token) return;
+  if (!hubReady()) return;
   LIGHTS.forEach(l=>{
     if (!HUB.synced[l.id]) return;
     const d=desiredOf(l), p=HUB.lastSent[l.id]||{}, patch={};
@@ -1874,7 +1876,7 @@ async function wireRemoteCard(){
 async function hubRefreshDevices(){
   try { HUB.devices = await hubApi('/api/devices'); } catch(e) { return; }
   const box=$('#devlist'); if (!box) return;
-  box.innerHTML = HUB.devices.map(dv=>`<div class="row"><span><b>${dv.name.replace(/</g,'&lt;')}</b> <span class="hint">${dv.me?'This device':'Last used '+(dv.last?new Date(dv.last*1000).toLocaleDateString():'a while ago')}</span></span>${dv.me?`<button class="btn small" data-hsignout="1">Sign out</button>`:`<button class="btn small danger" data-hremove="${dv.i}">Remove</button>`}</div>`).join('');
+  box.innerHTML = (HUB.remote ? `<div class="row"><span><b>This device</b> <span class="hint">Away from home, signed in with your password</span></span><button class="btn small" data-hsignout="1">Sign out</button></div>` : '') + HUB.devices.map(dv=>`<div class="row"><span><b>${dv.name.replace(/</g,'&lt;')}</b> <span class="hint">${dv.me?'This device':'Last used '+(dv.last?new Date(dv.last*1000).toLocaleDateString():'a while ago')}</span></span>${dv.me?`<button class="btn small" data-hsignout="1">Sign out</button>`:`<button class="btn small danger" data-hremove="${dv.i}">Remove</button>`}</div>`).join('');
   box.querySelectorAll('[data-hremove]').forEach(b=>b.onclick=async()=>{ try { await hubApi('/api/devices/remove',{i:+b.dataset.hremove}); toast('Device signed out'); hubRefreshDevices(); } catch(e) { toast('Couldn\'t remove it'); } });
   box.querySelectorAll('[data-hsignout]').forEach(b=>b.onclick=()=>{ hubApi('/api/logout',{}).catch(()=>{}).finally(hubSignedOut); });
 }
