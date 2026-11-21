@@ -1,0 +1,1961 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#111317"><meta name="apple-mobile-web-app-capable" content="yes"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font-size:14px}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>Light Deck</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=VT323&display=swap">
+<style>
+/* Layout: phone-first control surface. Header (status + theme switch), room switcher, one view per tab, bottom nav.
+   Three skins re-tint the same tokens; each skin also gets its own Lights view layout. */
+:root{
+  --bg:#111317; --panel:#1a1c21; --panel2:#23262c; --line:#2d3139; --fg:#ece8df; --mut:#8f949d;
+  --accent:#ffb547; --accent2:#ff6b3d; --good:#4fd18b; --warn:#f5b942; --bad:#ff5c5c;
+  --display:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;
+  --body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+  --radius:14px; --label-track:.08em;
+  color-scheme:dark;
+}
+body[data-skin="map"]{
+  --bg:#0c1721; --panel:#122230; --panel2:#17303f; --line:#27445a; --fg:#e3eef5; --mut:#87a3b6;
+  --accent:#7cd3ff; --accent2:#ffd27c; --display:'JetBrains Mono',ui-monospace,monospace; --radius:10px; --label-track:.04em;
+}
+body[data-skin="neon"]{
+  --bg:#0a0517; --panel:#120927; --panel2:#1b0f39; --line:#3c2273; --fg:#f6ecff; --mut:#a88fcf;
+  --accent:#ff3ef0; --accent2:#29f0ff; --display:'VT323',ui-monospace,monospace; --radius:4px; --label-track:.12em;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:14px;line-height:1.45;transition:background .3s}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{opacity:.4;cursor:default}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 110px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+body[data-skin="neon"]::after{content:"";position:fixed;inset:auto 0 0;height:45vh;z-index:-1;pointer-events:none;
+  background:linear-gradient(transparent,rgba(255,62,240,.08)),
+  repeating-linear-gradient(90deg,rgba(41,240,255,.16) 0 1px,transparent 1px 48px),
+  repeating-linear-gradient(0deg,rgba(255,62,240,.18) 0 1px,transparent 1px 32px);
+  transform:perspective(320px) rotateX(58deg);transform-origin:bottom;animation:grid 3s linear infinite}
+@keyframes grid{to{background-position:0 0,0 0,0 32px}}
+@media (prefers-reduced-motion:reduce){body[data-skin="neon"]::after{animation:none}}
+
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding-block:14px 12px;border-bottom:1px solid var(--line)}
+.brand{display:flex;flex-direction:column;gap:2px;min-width:0}
+.brand h1{margin:0;font-family:var(--display);font-weight:700;font-size:26px;letter-spacing:.02em;line-height:1}
+body[data-skin="neon"] .brand h1{font-size:34px;color:var(--accent);text-shadow:0 0 8px var(--accent),0 0 22px rgba(255,62,240,.6)}
+.status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);flex-wrap:wrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--good)}
+.seg{display:inline-flex;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--mut);padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;min-height:32px}
+.seg button[aria-pressed="true"]{background:var(--panel2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
+body[data-skin="neon"] .seg,body[data-skin="neon"] .seg button{border-radius:2px}
+
+main{padding-top:18px;display:flex;flex-direction:column;gap:18px}
+.view{display:flex;flex-direction:column;gap:16px}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:6px 12px;flex-wrap:wrap}
+.sec-h h2{margin:0;font-family:var(--display);font-size:22px;font-weight:700;letter-spacing:.02em;text-wrap:balance}
+body[data-skin="neon"] .sec-h h2{font-size:28px;color:var(--accent2);text-shadow:0 0 10px rgba(41,240,255,.6)}
+.hint{color:var(--mut);font-size:12.5px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+body[data-skin="neon"] .card{box-shadow:0 0 0 1px rgba(255,62,240,.15),0 0 24px rgba(255,62,240,.08) inset}
+.label{font-family:var(--display);font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:var(--label-track);color:var(--mut)}
+body[data-skin="neon"] .label{font-size:17px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:7px 13px;font-size:13px;font-weight:600;color:var(--fg);min-height:36px;display:inline-flex;align-items:center;gap:7px}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 18%,var(--panel2))}
+body[data-skin="neon"] .chip{border-radius:2px}
+.chip .sw{width:12px;height:12px;border-radius:50%}
+.btn{border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:9px 14px;font-weight:600;min-height:40px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#14110b}
+.btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+body[data-skin="neon"] .btn.primary{color:#12021a;box-shadow:0 0 14px var(--accent)}
+.btn.small{min-height:32px;padding:5px 10px;font-size:12.5px}
+input[type=range]{width:100%;accent-color:var(--accent);height:28px;margin:0}
+input[type=time],input[type=text],input[type=number],select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:38px;font-variant-numeric:tabular-nums;max-width:100%}
+input[type=text]{width:100%;font-size:13px}
+input.mono{font-family:var(--mono)}
+.num{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.switch{position:relative;width:46px;height:26px;border-radius:13px;border:1px solid var(--line);background:var(--panel2);flex:none;padding:0}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--mut);transition:transform .2s,background .2s}
+.switch[aria-checked="true"]{background:color-mix(in srgb,var(--accent) 35%,var(--panel2));border-color:var(--accent)}
+.switch[aria-checked="true"]::after{transform:translateX(20px);background:var(--accent)}
+.roombar{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.roombar .chip{flex:none}
+.segbar{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:1px;height:10px;width:100%;border-radius:3px;overflow:hidden;background:#000}
+.segbar i{display:block;background:#222}
+
+/* ---------- MIXER skin (flat lights, no glow) ---------- */
+.desk{background:linear-gradient(180deg,#1c1e23,#15171b);border:1px solid var(--line);border-radius:18px;padding:14px 10px 16px;display:flex;flex-direction:column;gap:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.stripscroll{overflow-x:auto;margin:0 -4px;padding:0 4px}
+.strips{display:grid;gap:6px}
+.strip{display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 4px;border-radius:12px;background:#121418;border:1px solid #24272e;min-width:0}
+.strip.master{background:#17191d}
+.strip .ch{font-family:var(--mono);font-size:10.5px;color:var(--mut);letter-spacing:.06em}
+.strip .segbar{width:40px;height:8px}
+.lampdot{width:34px;height:34px;border-radius:50%;border:1px solid #2c3038;padding:0;background:rgba(var(--c),calc(.15 + .85*var(--lv)))}
+.fader{position:relative;width:52px;height:250px;touch-action:none;cursor:ns-resize;--v:.5}
+.fader::before{content:"";position:absolute;inset:14px 4px;background:repeating-linear-gradient(0deg,#3a3e47 0 1px,transparent 1px 10%);mask:linear-gradient(90deg,#000 0 22%,transparent 22% 78%,#000 78%)}
+.fader .track{position:absolute;left:50%;top:14px;bottom:14px;width:6px;margin-left:-3px;background:#07080a;border-radius:3px;overflow:hidden}
+.fader .fill{position:absolute;left:0;right:0;bottom:0;height:calc(var(--v)*100%);background:rgb(var(--c));opacity:calc(.35 + .65*var(--lv))}
+.fader .cap{position:absolute;left:50%;width:42px;height:28px;margin-left:-21px;bottom:calc(var(--v)*(100% - 28px));background:linear-gradient(#454a53,#2a2d33 55%,#1f2227);border:1px solid #555b65;border-radius:5px;box-shadow:0 5px 10px rgba(0,0,0,.55)}
+.fader .cap::after{content:"";position:absolute;left:5px;right:5px;top:13px;height:2px;background:#e9e6df;border-radius:1px}
+.strip .lvl{font-family:var(--mono);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.strip .nm{font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-align:center;line-height:1.1;overflow-wrap:anywhere}
+.mute{width:44px;height:26px;border-radius:5px;border:1px solid #3a3e47;background:#1d2025;font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--mut)}
+.mute[aria-pressed="true"]{background:var(--accent);color:#14110b;border-color:var(--accent)}
+.sel{width:44px;height:22px;border-radius:5px;border:1px solid #3a3e47;background:#1d2025;font-family:var(--mono);font-size:10px;color:var(--mut)}
+.sel[aria-pressed="true"]{border-color:#7cd3ff;color:#7cd3ff}
+.deckfoot{display:grid;grid-template-columns:auto auto 1fr;gap:18px;align-items:center;padding:0 6px}
+@media (max-width:520px){.deckfoot{grid-template-columns:auto auto}.deckfoot .pads{grid-column:1 / -1}}
+.knobwrap{display:flex;flex-direction:column;align-items:center;gap:6px}
+.knob{width:84px;height:84px;border-radius:50%;position:relative;touch-action:none;cursor:grab;border:0;padding:0;
+  background:conic-gradient(from 0deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
+.knob::before{content:"";position:absolute;inset:9px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#4a4e57,#23262b 70%);box-shadow:0 4px 10px rgba(0,0,0,.6)}
+.knob .ptr{position:absolute;left:50%;top:50%;width:4px;height:30px;margin-left:-2px;margin-top:-30px;transform-origin:50% 100%;border-radius:2px;background:#fff}
+.knob .cc{position:absolute;inset:30px;border-radius:50%}
+.knobnote{font-size:11px;color:var(--mut);text-align:center;max-width:96px}
+.pads{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;min-width:0}
+.pad{aspect-ratio:1;max-width:100%;border-radius:10px;border:1px solid #3a3e47;background:#1d2025;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-family:var(--display);font-weight:700;font-size:14px;letter-spacing:.05em;padding:4px;min-width:0}
+.pad .pl{width:60%;height:4px;border-radius:2px}
+.pad:active{transform:translateY(1px)}
+
+/* ---------- MAP skin ---------- */
+.mapwrap{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:14px}
+@media (max-width:760px){.mapwrap{grid-template-columns:minmax(0,1fr)}}
+.blue{background:#0a1520;border:1px solid var(--line);border-radius:var(--radius);padding:10px;position:relative;
+  background-image:linear-gradient(rgba(124,211,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(124,211,255,.06) 1px,transparent 1px);background-size:20px 20px}
+.blue svg{display:block;width:100%;height:auto;touch-action:none;user-select:none}
+.blue .wall{fill:none;stroke:#cfe7f5;stroke-width:4}
+.blue .furn{fill:rgba(124,211,255,.08);stroke:#7cd3ff;stroke-width:1.2}
+.blue .furn-t{fill:#9cc3da;font-family:var(--mono);font-size:9px;text-anchor:middle;dominant-baseline:middle;pointer-events:none}
+.blue .dim{fill:#5f87a0;font-family:var(--mono);font-size:9px;text-anchor:middle}
+.blue .item{cursor:pointer}
+.blue.editing .item{cursor:move}
+.blue .item.picked .furn{stroke:#ffd27c;stroke-width:2;stroke-dasharray:4 3}
+.blue .lampcore{stroke:#e3eef5;stroke-width:1.5}
+.blue .item.picked .lampcore,.blue .item.focus .lampcore{stroke:#ffd27c;stroke-width:3}
+.edit-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.maptag{position:absolute;top:14px;left:16px;font-family:var(--mono);font-size:11px;color:#5f87a0;pointer-events:none}
+
+/* ---------- NEON skin ---------- */
+.neongrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.ncard{position:relative;background:rgba(18,9,39,.85);border:2px solid rgba(var(--c),calc(.25 + .75*var(--lv)));border-radius:4px;padding:16px;display:flex;flex-direction:column;gap:10px;
+  box-shadow:0 0 calc(30px*var(--lv)) rgba(var(--c),.45),inset 0 0 calc(24px*var(--lv)) rgba(var(--c),.25)}
+.ncard .nn{font-family:var(--display);font-size:30px;line-height:1;color:rgb(var(--c));text-shadow:0 0 10px rgba(var(--c),.8)}
+.ncard .np{font-family:var(--display);font-size:54px;line-height:.9;font-variant-numeric:tabular-nums}
+.ncard .bars{display:grid;grid-template-columns:repeat(20,1fr);gap:3px;height:16px}
+.ncard .bars i{background:rgba(var(--c),.15)}
+.ncard .bars i.on{background:rgb(var(--c));box-shadow:0 0 6px rgb(var(--c))}
+.ncard .meta{font-family:var(--display);font-size:17px;color:var(--mut);letter-spacing:.08em}
+.nbtn{font-family:var(--display);font-size:20px;letter-spacing:.1em;border:2px solid var(--accent2);background:transparent;color:var(--accent2);border-radius:2px;padding:4px 12px;text-shadow:0 0 6px var(--accent2)}
+.nbtn[aria-pressed="false"]{border-color:var(--mut);color:var(--mut);text-shadow:none}
+
+.ledit{display:flex;flex-direction:column;gap:12px}
+.swbtn{width:46px;height:46px;border-radius:12px;border:2px solid var(--line);flex:none}
+.bigname{font-family:var(--display);font-size:24px;font-weight:700;line-height:1.1}
+
+/* scenes */
+.scenes{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.scene{position:relative;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);min-height:120px;display:flex;flex-direction:column}
+.sapply{border:0;background:none;color:inherit;text-align:left;display:flex;flex-direction:column;gap:10px;padding:12px;width:100%;flex:1;border-radius:inherit}
+.smore{position:absolute;bottom:8px;right:8px;width:32px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);font-weight:700;line-height:1;padding:0}
+.smenu{display:flex;flex-direction:column;gap:8px;padding:0 12px 12px}
+.srow{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px}
+.srow.excluded b{color:var(--mut)}
+.srow .ctl{display:grid;grid-template-columns:auto auto minmax(0,1fr) 44px;gap:10px;align-items:center}
+.sgrad{height:36px;border-radius:10px}
+.smenu .chips{gap:6px}
+/* drag to reorder: hold (touch) or click-drag (mouse) */
+[data-sort]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.drag-src{opacity:.3}
+.drag-ghost{position:fixed;margin:0;pointer-events:none;z-index:40;box-shadow:0 14px 34px rgba(0,0,0,.55);transform:scale(1.03);opacity:.95}
+.handle{cursor:grab;touch-action:none;border:0;background:none;color:var(--mut);font-size:18px;line-height:1;padding:6px 4px;min-height:36px}
+.strip .ch.handle{cursor:grab;touch-action:none;padding:4px 6px;border-radius:5px;font-size:10.5px;min-height:0}
+.strip .ch.handle:hover{background:#1d2025}
+.scene .grad{height:46px;border-radius:8px}
+.scene .sn{font-weight:700;font-size:15px}
+.scene .badge{position:absolute;top:8px;right:8px;font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(0,0,0,.55);color:#fff}
+.scene.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+
+/* modes */
+.fxgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.fx{border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:12px;text-align:left;display:flex;flex-direction:column;gap:8px;min-height:92px}
+.fx .pv{height:20px;border-radius:5px}
+.fx[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.fx b{font-size:14px}.fx span{font-size:12px;color:var(--mut)}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.mcard{border:1px solid var(--line);background:var(--panel);border-radius:var(--radius);padding:12px;display:flex;flex-direction:column;gap:10px}
+.mcard.running{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.mcard .segbar{height:22px;border-radius:6px}
+.mcard .mt{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mcard .mt b{font-size:15px}
+.newmode{border:1px dashed var(--line);background:transparent;border-radius:var(--radius);min-height:120px;color:var(--mut);font-weight:600}
+.meter{display:flex;align-items:flex-end;gap:3px;height:48px}
+.meter i{flex:1;background:var(--accent);border-radius:2px;min-height:2px;opacity:.85}
+
+/* mode editor (WiZ-style) */
+.pal{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+.palc{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--mut)}
+.palc .b{width:48px;height:48px;border-radius:50%;border:2px solid var(--line);position:relative}
+.palc .x{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--panel);font-size:12px;line-height:1;padding:0;color:var(--fg)}
+.palc .add{width:48px;height:48px;border-radius:50%;border:1px dashed var(--mut);background:transparent;font-size:22px;color:var(--fg)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.tile{border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:13px;font-weight:600}
+.tile[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--panel2))}
+.tile svg{width:56px;height:22px}
+.prevbox{display:flex;align-items:center;gap:14px;background:#08090b;border:1px solid var(--line);border-radius:12px;padding:14px}
+.prevbox .segbar{height:18px;flex:1}
+.prevbox .bulb{width:30px;height:30px;border-radius:50%;flex:none;background:rgba(var(--c),calc(.12 + .88*var(--lv)))}
+
+/* clock */
+.clockprev{background:#08090b;border:1px solid var(--line);border-radius:var(--radius);padding:22px 12px;display:flex;justify-content:center}
+.dchips{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.dchip{border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;font-weight:600}
+.dchip i{width:28px;height:28px;border-radius:8px;display:block}
+
+/* settings */
+.skins{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.skinc{border:2px solid var(--line);border-radius:12px;padding:0;overflow:hidden;background:var(--panel2);text-align:left}
+.skinc[aria-pressed="true"]{border-color:var(--accent)}
+.skinc .pv{height:70px}
+.skinc div.t{padding:8px 10px;font-weight:700;font-size:13px}
+.dev{display:grid;grid-template-columns:auto minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px 10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);background:var(--panel)}
+.dev:last-child{border-bottom:0}
+@media (max-width:640px){.dev{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr)}.dev .main{grid-column:2 / -1}.dev .acts{grid-column:2 / -1;justify-content:flex-start}}
+.dev .acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.addform{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px}
+.kv dt{color:var(--mut)}.kv dd{margin:0;text-align:right}
+.fbadge{font-family:var(--mono);font-size:10.5px;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:var(--mut)}
+.fbadge.on{border-color:var(--accent);color:var(--accent)}
+
+nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--line);
+  padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+nav .in{max-width:720px;margin:0 auto;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px}
+nav button{border:0;background:transparent;color:var(--mut);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;font-size:11px;font-weight:600;min-height:50px}
+nav button[aria-current="page"]{color:var(--accent);background:var(--panel)}
+nav svg{width:22px;height:22px}
+
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+#sheetRoot .backdrop{z-index:25}
+.sheet{width:100%;max-width:520px;background:var(--panel);border:1px solid var(--line);border-bottom:0;border-radius:20px 20px 0 0;padding:18px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:14px;max-height:90vh;overflow:auto}
+.sheet.tall{max-width:640px}
+.sheet .pv{height:56px;border-radius:12px}
+.hue{-webkit-appearance:none;appearance:none;height:18px;border-radius:9px;background:linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
+.hue::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;border-radius:50%;background:#fff;border:3px solid #000}
+.hue::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid #000}
+.hue.kel{background:linear-gradient(90deg,#ff932c,#ffa957,#ffb46b,#ffd1a3,#ffe4ce,#fff9fd)}
+.swrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:8px}
+.swrow button{aspect-ratio:1;max-width:100%;border-radius:50%;border:2px solid var(--line)}
+#toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-weight:600;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:calc(100vw - 32px)}
+/* lock screen */
+#lock{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;
+  padding:max(24px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(24px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+#lock form{width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px}
+#lock h1{margin:0;font-family:var(--display);font-size:34px;font-weight:700;letter-spacing:.02em}
+#lock .lk{width:52px;height:52px;border-radius:14px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--accent)}
+#lock input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:16px;min-height:48px}
+#lock .err{color:var(--bad);font-size:13px;min-height:18px}
+#lock .btn{min-height:48px;font-size:15px}
+.pwrow{position:relative}
+.pwrow button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--mut);font-size:12.5px;font-weight:600;padding:8px}
+body.live .demo{display:none!important}
+.livenote{border:1px dashed var(--line);border-radius:var(--radius);padding:10px 14px;font-size:12.5px;color:var(--mut)}
+.demo{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:5px;border:1px dashed var(--mut);color:var(--mut)}
+</style>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <h1 id="title">Light Deck</h1>
+      <div class="status"><span class="dot"></span><span id="nettext"></span> <span class="demo">demo</span></div>
+    </div>
+    <div class="seg" role="group" aria-label="Theme" id="skinseg">
+      <button data-skin="mixer">Mixer</button><button data-skin="map">Room map</button><button data-skin="neon">Neon</button>
+    </div>
+  </header>
+  <main id="main"></main>
+</div>
+
+<nav aria-label="Sections"><div class="in" id="nav"></div></nav>
+<div id="editorRoot"></div>
+<div id="sheetRoot"></div>
+<div id="toast" hidden></div>
+<div id="lock" hidden></div>
+
+<script>
+/* ===================== data ===================== */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+// What each kind of light can do. grad = can show several colors along its length.
+const TYPES = {
+  clock: {label:'LED clock',           grad:true,  segs:0,  wiz:false},
+  rgbic: {label:'WiZ RGBIC strip',     grad:true,  segs:20, wiz:true},
+  bulb:  {label:'WiZ bulb',            grad:false, segs:0,  wiz:true},
+  esp:   {label:'ESP32 LED strip',     grad:true,  segs:30, wiz:false},
+};
+let LIGHTS = [
+  {id:'clock', name:'Clock',        room:'dorm', type:'clock', ip:'10.73.25.41',  mac:'A0:B7:65:2F:11:C8', on:true,  bri:55, c:[255,60,0]},
+  {id:'desk',  name:'Desk lamp',    room:'dorm', type:'rgbic', ip:'10.73.24.94',  mac:'CC:40:85:66:9D:F4', on:true,  bri:70, c:[120,70,255]},
+  {id:'floor', name:'Floor lamp',   room:'dorm', type:'bulb',  ip:'10.73.25.179', mac:'CC:40:85:DF:85:38', on:true,  bri:40, c:[255,150,70]},
+  {id:'bed',   name:'Bedside lamp', room:'dorm', type:'bulb',  ip:'10.73.24.100', mac:'CC:40:85:E0:78:66', on:false, bri:30, c:[255,110,60]},
+];
+const byId = id => LIGHTS.find(l => l.id === id);
+const isGrad = l => TYPES[l.type].grad;
+const short = n => n.replace(/ lamp$/,'');
+
+const FURN_NAMES = {bed:'Bed', desk:'Desk', dresser:'Dresser', rug:'Rug', chair:'Chair', shelf:'Shelf', door:'Door', fridge:'Mini fridge', couch:'Couch', tv:'TV'};
+const FURN_SIZES = {bed:[3.3,6.6], desk:[4,2], dresser:[3,1.6], rug:[4,3], chair:[1.6,1.6], shelf:[3,1], fridge:[1.7,1.7], door:[3,.5], couch:[6,2.6], tv:[4,.5]};
+const DORM_LAYOUT = {w:12, h:14, items:[
+  {k:'bed',x:0.3,y:0.3,w:4.5,h:6.6,r:0},{k:'desk',x:7.4,y:0.3,w:4.3,h:2.2,r:0},{k:'dresser',x:8.6,y:6.5,w:3.1,h:1.6,r:90},
+  {k:'rug',x:4.6,y:6.0,w:4.0,h:3.0,r:0},{k:'door',x:8.5,y:13.4,w:3.0,h:0.5,r:0}]};
+
+let S = {
+  skin:'mixer', tab:'lights', room:'all', sel:'desk', master:100, armed:['desk'],
+  colorA:[255,60,0], colorB:[0,200,255],
+  fx:null, fxTargets:null, speed:50, musicSrc:'phone', sens:60, activeScene:null,
+  rooms:[{id:'dorm', name:'Dorm room'}],
+  layouts:{dorm:JSON.parse(JSON.stringify(DORM_LAYOUT))},
+  lampPos:{bed:{x:1.0,y:7.6}, desk:{x:9.6,y:1.3}, floor:{x:1.2,y:12.6}, clock:{x:6.2,y:0.6}},
+  editing:false, picked:null,
+  modes:[
+    {id:'m1', name:'Ember', pal:['ff3a3a','ff8a00'], loop:'gradual', grad:'rainbow', speed:40, room:'all', roles:{}},
+    {id:'m2', name:'Ocean drift', pal:['0050ff','00e0c8','6a00ff'], loop:'gradual', grad:'flow', speed:35, room:'all', roles:{floor:'c1'}},
+    {id:'m3', name:'Night sky', pal:['1a2cff','ffffff'], loop:'pulse', grad:'sparkle', speed:30, room:'all', roles:{bed:'off'}},
+    {id:'m4', name:'Comet', pal:['ffd27c','ff2e88'], loop:'jump', grad:'shooting', speed:60, room:'all', roles:{}},
+  ],
+  presets:[
+    {name:'Chill',  L:{clock:[1,40,[255,90,30]], desk:[1,50,[120,60,255]], floor:[1,35,[255,140,60]], bed:[1,25,[255,100,50]]}},
+    {name:'Focus',  L:{clock:[1,80,[255,235,220]], desk:[1,95,[255,235,220]], floor:[1,85,[255,225,200]], bed:[0,30,[255,210,160]]}},
+    {name:'Movie',  L:{clock:[1,8,[255,40,0]], desk:[1,18,[40,70,255]], floor:[0,20,[255,140,60]], bed:[1,10,[255,120,40]]}},
+    {name:'Party',  L:{clock:[1,100,[255,0,200]], desk:[1,100,[0,220,255]], floor:[1,90,[255,0,120]], bed:[1,80,[120,0,255]]}},
+    {name:'Sunset', L:{clock:[1,60,[255,70,0]], desk:[1,60,[255,60,120]], floor:[1,55,[255,130,30]], bed:[1,40,[255,90,60]]}},
+    {name:'Night',  L:{clock:[1,5,[255,10,0]], desk:[0,10,[255,0,0]], floor:[0,10,[255,0,0]], bed:[1,6,[255,30,0]]}},
+  ],
+  clock:{speed:128, dc:['ff3c00','ff3c00','00c8ff','00c8ff'], colon:'ffffff', link:true, h24:false, lead:false, blink:true, fx:'solid', trans:'wipe', alarmFx:true},
+  sched:{wake:{on:true,time:'07:30',days:[1,2,3,4,5],fade:20}, night:{on:true,from:'21:30',k:2200}, dim:{on:true,from:'23:00',to:'07:00',lvl:10}, sleepEnd:0},
+};
+const KEY='lightdeck-demo-v2';
+try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s) { Object.assign(S, s.S); LIGHTS = s.L; } } catch(e) {}
+S.editing=false; S.picked=null;
+if (!S.fxTargets) S.fxTargets = LIGHTS.map(l=>l.id);
+// per-light dynamic modes: lightModes[lightId] = modeId. lastMode = the one knobs A/B edit.
+if (!S.lightModes) S.lightModes = {};
+if (S.fx && S.fx.startsWith('m:')) { const mid=S.fx.slice(2); LIGHTS.forEach(l=>S.lightModes[l.id]=mid); S.lastMode=mid; S.fx=null; }
+delete S.modeOnly;
+{ const desk=byId('desk'); if (desk && desk.type==='rgbic' && !S.deskSegsMeasured) { desk.segUsed=9; S.deskSegsMeasured=true; } }   // measured Nov 20 2026: exactly 9 segments visible
+if (!S.devices) S.devices = [{n:'This browser', me:true}, {n:'Laptop · Chrome', w:'2 days ago'}, {n:'iPad · Safari', w:'last week'}];
+if (!S.musicPal) S.musicPal =['ff3ef0','29f0ff','ffd23f'];   // music sync colors (2-6), step one per beat
+// Demo: everything in this browser. Live (served by the hub): shared data goes to the hub, per-device prefs stay here.
+function save(){
+  if (typeof HUB!=='undefined' && HUB.live) { hubSaveDevice(); hubScheduleSave(); return; }
+  try { localStorage.setItem(KEY, JSON.stringify({S, L:LIGHTS})); } catch(e) {}
+}
+
+const roomLights = r => LIGHTS.filter(l => r==='all' || l.room===r);
+const roomName = r => r==='all' ? 'All rooms' : (S.rooms.find(x=>x.id===r)||{name:'?'}).name;
+const faderNo = l => { const i = roomLights(l.room).indexOf(l); return i < 4 ? i+1 : 0; };
+
+/* ===================== color helpers ===================== */
+const hex2rgb = h => [0,2,4].map(i => parseInt(h.slice(i,i+2),16) || 0);
+const rgb2hex = c => c.map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+const css = (c,a=1) => `rgba(${c.map(Math.round).join(',')},${a})`;
+const mix = (a,b,f) => a.map((v,i)=>v+(b[i]-v)*f);
+const frac = x => x - Math.floor(x);
+function hsv(h,s=1,v=1){ const f=n=>{const k=(n+h/60)%6; return v-v*s*Math.max(0,Math.min(k,4-k,1));}; return [f(5)*255,f(3)*255,f(1)*255]; }
+function toHS(c){ const [r,g,b]=c.map(v=>v/255), mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn; let h=0;
+  if(d){ if(mx===r) h=((g-b)/d)%6; else if(mx===g) h=(b-r)/d+2; else h=(r-g)/d+4; } return [(h*60+360)%360, mx?d/mx:0]; }
+function kelvin(k){ return k<=2400?[255,140,40]:k<=3000?[255,170,90]:k<=4200?[255,210,160]:k<=5500?[255,235,220]:[235,240,255]; }
+// smooth white-temperature color, 2200 K (warm yellow) to 6500 K (white), for the whites slider
+const KEL_PTS=[[2200,[255,147,44]],[2700,[255,169,87]],[3000,[255,180,107]],[4000,[255,209,163]],[5000,[255,228,206]],[6500,[255,249,253]]];
+function kelvinSmooth(k){ for(let i=1;i<KEL_PTS.length;i++){ const [k1,c1]=KEL_PTS[i]; if(k<=k1){ const [k0,c0]=KEL_PTS[i-1]; return mix(c0,c1,(k-k0)/(k1-k0)).map(Math.round); } } return KEL_PTS[KEL_PTS.length-1][1]; }
+const noise = t => (Math.sin(t*1.7)+Math.sin(t*3.1+1.3)*.6+Math.sin(t*7.3+.4)*.35)/1.95;
+const hash = x => frac(Math.sin(x*12.9898)*43758.5453);
+
+/* ===================== dynamic modes (palette + color-loop + gradient) ===================== */
+const LOOPS = [['jump','Jump','Snaps from color to color'],['gradual','Gradual','Blends smoothly between colors'],['pulse','Pulse','Each color fades in and out']];
+const GRADS = [['flow','Flow'],['shooting','Shooting star'],['sparkle','Sparkle'],['rainbow','Rainbow']];
+const GRAD_ICON = {
+  flow:'<defs><linearGradient id="gi1"><stop offset="0" stop-color="#7cd3ff" stop-opacity=".2"/><stop offset="1" stop-color="#ffd23f"/></linearGradient></defs><path d="M2 11 Q30 6 52 9 a3 3 0 0 1 0 5 Q30 16 2 11z" fill="url(#gi1)"/>',
+  shooting:'<path d="M4 11 L36 9 L36 13z" fill="#7cd3ff" opacity=".6"/><circle cx="44" cy="11" r="6" fill="#ffd23f"/>',
+  sparkle:'<path d="M2 11h52" stroke="#7cd3ff" stroke-width="1.5"/><path d="M12 3l2 8-2 8-2-8zM28 3l2 8-2 8-2-8zM44 3l2 8-2 8-2-8z" fill="#ffd23f"/>',
+  rainbow:'<path d="M8 20a20 15 0 0 1 40 0" fill="none" stroke="url(#gi2)" stroke-width="5"/><defs><linearGradient id="gi2"><stop offset="0" stop-color="#ffd23f"/><stop offset=".5" stop-color="#7cf0a0"/><stop offset="1" stop-color="#7cd3ff"/></linearGradient></defs>',
+};
+const modeById = id => S.modes.find(m=>m.id===id);
+const modeOfLight = id => { const mid=S.lightModes[id]; return mid ? modeById(mid) : null; };
+const activeModeIds = () => [...new Set(Object.entries(S.lightModes).filter(([id,mid])=>byId(id)&&modeById(mid)).map(([,mid])=>mid))];
+// the mode knobs A/B edit: the most recently started one that's still running
+const runningMode = () => { const a=activeModeIds(); return a.includes(S.lastMode) ? modeById(S.lastMode) : (a.length ? modeById(a[a.length-1]) : null); };
+let draft = null;   // mode open in the editor (previewed live)
+const palRgb = m => m.pal.map(hex2rgb);
+function palAt(pal, x){ const n=pal.length, y=frac(x)*n, i=Math.floor(y)%n; return mix(pal[i], pal[(i+1)%n], y-Math.floor(y)); }
+// color-loop: what a single-color light (or a gradient light with no gradient effect) shows
+function loopColor(m, t, offset=0){
+  const pal=palRgb(m), n=pal.length, x=t*0.22*(m.speed/50)+offset, i=Math.floor(x)%n, f=frac(x);
+  if (m.loop==='jump') return [pal[i],1];
+  if (m.loop==='pulse') return [pal[i], .12+.88*Math.sin(Math.PI*f)];
+  return [mix(pal[i],pal[(i+1)%n],f),1];
+}
+// gradient: color at position p (0..1) along a gradient-capable light
+function gradColor(m, p, t, seed=0){
+  const pal=palRgb(m), sp=m.speed/50;
+  if (!m.grad) return loopColor(m,t,seed*.13);
+  if (m.grad==='flow') return [palAt(pal, p*.999 - t*.12*sp), 1];
+  if (m.grad==='rainbow') return [hsv((p*360 + t*60*sp)%360), 1];
+  if (m.grad==='shooting'){ const head=frac(t*.32*sp+seed*.21), d=frac(head-p), tail=.3;
+    return d<tail ? [mix(pal[0], pal[1%pal.length], d/tail), 1-d*2.2] : [pal[1%pal.length], .18]; }
+  if (m.grad==='sparkle'){ const base=palAt(pal,p), tick=Math.floor(t*7*sp), s=hash(Math.floor(p*40)*7.1 + tick*.37 + seed);
+    return s>.84 ? [mix(base,[255,255,255],.55),1] : [base,.45]; }
+  return [pal[0],1];
+}
+// does mode m apply to light l, and how
+function modeOut(m, l, i, t, p=.5){
+  if (isGrad(l)) return gradColor(m, p, t, i);
+  const role = (m.roles||{})[l.id] || 'loop';
+  if (role==='off') return [[0,0,0],0];
+  if (role.startsWith('c')) { const pal=palRgb(m); return [pal[Math.min(+role.slice(1),pal.length-1)],1]; }
+  return loopColor(m, t, i*.0);
+}
+
+/* ===================== quick effects (built-in) ===================== */
+const FX = [
+  {id:null,      name:'Off',          d:'Lights hold their own colors', pv:'linear-gradient(90deg,#555,#888)'},
+  {id:'fade',    name:'Color fade',   d:'All lights drift through hues together', pv:'linear-gradient(90deg,#f33,#fc3,#3f6,#3cf,#93f)'},
+  {id:'candle',  name:'Candle',       d:'Warm flicker, out of sync per lamp', pv:'linear-gradient(90deg,#ff7a1a,#ffb347,#ff5a00,#ffa23a)'},
+  {id:'breathe', name:'Breathe',      d:'Slow pulse, offset lamp to lamp', pv:'linear-gradient(90deg,#222,#7cd3ff,#222)'},
+  {id:'music',   name:'Music sync',   d:'Pulse and change color on the beat', pv:'repeating-linear-gradient(90deg,#ff3ef0 0 6px,#29f0ff 6px 12px)'},
+];
+let beat = {env:0, idx:0, last:0};
+// music sync color: steps through your palette once per beat; 'offset' spreads lights / positions across it
+function musicColor(offset){ const pal=S.musicPal.map(hex2rgb), n=pal.length; return pal[((beat.idx+offset)%n+n)%n]; }
+const musicGrad = () => `repeating-linear-gradient(90deg,${S.musicPal.map((h,i)=>`#${h} ${i*8}px ${(i+1)*8}px`).join(',')})`;
+
+/* What light l shows at position p (0..1 along it) right now: [rgb, level 0..1] */
+function lightAt(l, i, t, p=.5){
+  const lvBase = l.on ? (l.bri/100)*(S.master/100) : 0;
+  if (!l.on) return [l.c, 0];
+  if (l.wizScene) {                      // the lamp is running one of WiZ's own scenes: preview it
+    const w = wizSceneInfo(l.wizScene), pal = w.pal.map(hex2rgb);
+    if (!w.dyn) return [pal[0], lvBase];
+    if (w.flicker) { const n=noise(t*4+i*9+p*6); return [mix(pal[0], pal[1%pal.length], .5+.5*n), lvBase*(.65+.35*n)]; }
+    return [palAt(pal, p*.8 - t*.06 + i*.17), lvBase];
+  }
+  const m = modeOfLight(l.id);
+  if (m) { const o = modeOut(m,l,i,t,p); return [o[0], lvBase*o[1]]; }
+  let c=l.c, lv=lvBase;
+  if (S.fx && S.fxTargets.includes(l.id)) {
+    const sp=S.speed/50;
+    if (S.fx==='fade')    c = hsv((t*18*sp)%360);
+    if (S.fx==='candle')  { const n=noise(t*sp*4+i*9+p*6); c=[255,120+40*n,25]; lv *= .62+.38*n; }
+    if (S.fx==='breathe') lv *= .22 + .78*(.5+.5*Math.sin(t*sp*1.5 + i*.8));
+    if (S.fx==='music')   { c = musicColor(i + Math.floor(p*S.musicPal.length*.999)); lv *= .2 + .8*beat.env; }
+  }
+  return [c, Math.max(0,Math.min(1,lv))];
+}
+
+/* ===================== app shell ===================== */
+const TABS = [
+  ['lights','Lights','<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.6 1 2.5h6c0-.9.2-1.7 1-2.5A6 6 0 0 0 12 3z"/>'],
+  ['scenes','Scenes','<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>'],
+  ['modes','Modes','<path d="M4 12c2-6 4-6 6 0s4 6 6 0 3-4 4-2"/>'],
+  ['clock','Clock','<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 10v4M11 10v4M14 10.5v.01M14 13.5v.01M17 10v4"/>'],
+  ['sched','Schedule','<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'],
+  ['settings','Settings','<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>'],
+];
+function navHtml(){ return TABS.filter(([id])=>id!=='clock'||byId('clock')).map(([id,n,p]) => `<button data-tab="${id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>${n}</button>`).join(''); }
+$('#nav').onclick = e => { const b=e.target.closest('button'); if(!b) return; S.tab=b.dataset.tab; S.editing=false; render(); save(); window.scrollTo(0,0); };
+$('#skinseg').onclick = e => { const b=e.target.closest('button'); if(!b) return; setSkin(b.dataset.skin); };
+function setSkin(k){ S.skin=k; S.editing=false; render(); save(); }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast.h); toast.h=setTimeout(()=>t.hidden=true,2000); }
+const sw = (on,id,label,extra='') => `<button class="switch" role="switch" aria-checked="${!!on}" aria-label="${label}" id="${id}" ${extra}></button>`;
+const segbar = (id,n) => `<div class="segbar" data-segs="${id}" style="--n:${n}" aria-hidden="true">${'<i></i>'.repeat(n)}</div>`;
+// segments the app actually uses on a strip: "Segments in use" (the visible length), or what the strip reports
+const segMax = l => TYPES[l.type].segs;
+const isSegmented = l => l.type==='rgbic' || l.type==='esp';
+const segsOf = l => l.type==='clock' ? 20 : Math.max(1, Math.min(segMax(l), l.segUsed || segMax(l)));
+
+function render(){
+  document.body.dataset.skin = S.skin;
+  if (S.room!=='all' && !S.rooms.find(r=>r.id===S.room)) S.room='all';
+  if (!byId(S.sel)) S.sel = (LIGHTS[0]||{}).id;
+  if (S.tab==='clock' && !byId('clock')) S.tab='lights';
+  $('#title').textContent = S.skin==='neon' ? 'LIGHT DECK' : 'Light Deck';
+  $('#nettext').textContent = netText();
+  $$('#skinseg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.skin===S.skin));
+  $('#nav').innerHTML = navHtml();
+  $$('#nav button').forEach(b => b.dataset.tab===S.tab ? b.setAttribute('aria-current','page') : b.removeAttribute('aria-current'));
+  const v = {lights:viewLights, scenes:viewScenes, modes:viewModes, clock:viewClock, sched:viewSched, settings:viewSettings}[S.tab];
+  $('#main').innerHTML = `<section class="view">${v()}</section>`;
+  wire[S.tab] && wire[S.tab]();
+  collect(); paint(performance.now()/1000); readouts();
+}
+
+/* ---------- live painting ---------- */
+let paintEls = [];
+function collect(){ paintEls = LIGHTS.map(l => ({l, els:$$(`[data-l="${l.id}"]`), stops:$$(`[data-stop="${l.id}"]`), glows:$$(`[data-glow="${l.id}"]`), segs:$$(`[data-segs="${l.id}"]`)})); }
+function paint(t){
+  paintEls.forEach(({l,els,stops,glows,segs},i) => {
+    const [c,lv] = lightAt(l,i,t), cs = c.map(Math.round).join(',');
+    els.forEach(e => { e.style.setProperty('--c',cs); e.style.setProperty('--lv',lv.toFixed(3)); });
+    stops.forEach(s => { s.setAttribute('stop-color',`rgb(${cs})`); s.setAttribute('stop-opacity',(lv*.95).toFixed(3)); });
+    glows.forEach(g => g.setAttribute('r', (18 + 70*lv).toFixed(1)));
+    segs.forEach(bar => { const kids=bar.children, n=kids.length;
+      for (let k=0;k<n;k++){ const [sc,sl]=lightAt(l,i,t,n>1?k/(n-1):.5); kids[k].style.background = `rgb(${sc.map(v=>Math.round(v*(.1+.9*sl))).join(',')})`; } });
+  });
+  if (draft) paintDraft(t);
+}
+function readouts(){
+  LIGHTS.forEach(l => {
+    $$(`[data-r="${l.id}"]`).forEach(e => e.textContent = l.on ? l.bri+'%' : 'OFF');
+    $$(`[data-v="${l.id}"]`).forEach(e => { e.style.setProperty('--v', l.bri/100); e.setAttribute('aria-valuenow', l.bri); });
+    $$(`[data-on="${l.id}"]`).forEach(e => e.setAttribute(e.classList.contains('switch')?'aria-checked':'aria-pressed', l.on));
+    $$(`[data-bars="${l.id}"]`).forEach(e => [...e.children].forEach((b,k) => b.classList.toggle('on', l.on && k < Math.round(l.bri/5))));
+    $$(`input[data-bri="${l.id}"]`).forEach(e => { if (document.activeElement!==e) e.value=l.bri; });
+  });
+  $$('[data-v="master"]').forEach(e => e.style.setProperty('--v', S.master/100));
+  const m=$('#masterr'); if(m) m.textContent=S.master+'%';
+}
+function changed(){ S.activeScene=null; readouts(); save(); }
+
+function fader(el, get, set){
+  const fromY = y => { const r=el.getBoundingClientRect(); return Math.round(Math.max(0,Math.min(1,(r.bottom-14-y)/(r.height-28)))*100); };
+  el.onpointerdown = e => { el.setPointerCapture(e.pointerId); el._d=true; set(Math.max(1,fromY(e.clientY))); };
+  el.onpointermove = e => { if(el._d) set(Math.max(1,fromY(e.clientY))); };
+  el.onpointerup = el.onpointercancel = () => el._d=false;
+  el.onkeydown = e => { const d = {ArrowUp:5,ArrowRight:5,ArrowDown:-5,ArrowLeft:-5,PageUp:20,PageDown:-20}[e.key]; if(!d) return; e.preventDefault(); set(Math.max(1,Math.min(100,get()+d))); };
+}
+function knob(el, getHue, setHue){
+  const ang = e => { const r=el.getBoundingClientRect(); return (Math.atan2(e.clientX-(r.left+r.width/2), -(e.clientY-(r.top+r.height/2)))*180/Math.PI+360)%360; };
+  el.onpointerdown = e => { el.setPointerCapture(e.pointerId); el._d=true; setHue(ang(e)); };
+  el.onpointermove = e => { if(el._d) setHue(ang(e)); };
+  el.onpointerup = el.onpointercancel = () => { el._d=false; save(); };
+  el.onkeydown = e => { const d={ArrowRight:10,ArrowUp:10,ArrowLeft:-10,ArrowDown:-10}[e.key]; if(!d) return; e.preventDefault(); setHue((getHue()+d+360)%360); };
+}
+// knobs A/B: live palette of the running mode, otherwise A colors the SEL channels
+function setKnob(which, rgb){
+  const m = runningMode();
+  if (which==='A') S.colorA=rgb; else S.colorB=rgb;
+  if (m) { m.pal[which==='A'?0:1] = rgb2hex(rgb); }
+  else if (which==='A') { S.armed.filter(byId).forEach(id=>Object.assign(byId(id),{c:rgb.slice(),on:true})); changed(); }
+  // knob B + the clock's SEL on = the clock's second color (two-color snake and breathe)
+  else if (knobBClock()) { S.clock.c2 = rgb2hex(rgb); S.clock.c2auto = false; save(); }
+}
+const knobBClock = () => !runningMode() && byId('clock') && S.armed.includes('clock');
+
+/* ===================== LIGHTS ===================== */
+function roomBar(){
+  return `<div class="roombar" role="group" aria-label="Room">${[{id:'all',name:'All'},...S.rooms].map(r=>`<button class="chip" data-room="${r.id}" aria-pressed="${S.room===r.id}">${r.name} <span class="hint num">${roomLights(r.id).length}</span></button>`).join('')}</div>`;
+}
+function viewLights(){
+  const body = S.skin==='mixer' ? lightsMixer() : S.skin==='map' ? lightsMap() : lightsNeon();
+  const act = activeModeIds();
+  const banner = act.length ? `<div class="card" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:10px 14px"><span>${act.map(mid=>{ const m=modeById(mid), n=Object.values(S.lightModes).filter(x=>x===mid).length; return `<button class="chip" data-editmode="${mid}" style="margin:2px 6px 2px 0"><span class="sw" style="background:${modeGradCss(m)}"></span>${m.name} <span class="hint">${n} light${n>1?'s':''}</span></button>`; }).join('')}</span><button class="btn small" data-fx="null">Stop all modes</button></div>` : '';
+  return roomBar() + banner + body;
+}
+function lightsMixer(){
+  const ls = roomLights(S.room);
+  if (!ls.length) return emptyRoom();
+  const strip = l => `
+    <div class="strip" data-sort data-key="${l.id}">
+      <span class="ch handle" title="Hold and drag to reorder">${faderNo(l)&&S.room!=='all'?'FADER '+faderNo(l):'⠿ '+short(l.name).slice(0,7).toUpperCase()}</span>
+      <button class="lampdot" data-l="${l.id}" data-color="${l.id}" aria-label="Pick ${l.name} color"></button>
+      ${isGrad(l)&&l.type!=='clock' ? segbar(l.id, segsOf(l)) : `<span style="height:8px"></span>`}
+      <button class="sel" data-arm="${l.id}" aria-pressed="${S.armed.includes(l.id)}">SEL</button>
+      <div class="fader" data-l="${l.id}" data-v="${l.id}" data-fader="${l.id}" role="slider" tabindex="0" aria-label="${l.name} brightness" aria-valuemin="1" aria-valuemax="100">
+        <div class="track"><div class="fill"></div></div><div class="cap"></div></div>
+      <span class="lvl" data-r="${l.id}"></span>
+      <button class="mute" data-on="${l.id}" data-toggle="${l.id}" aria-label="${l.name} on/off">ON</button>
+      <span class="nm">${short(l.name)}</span>${l.wizScene?`<span class="hint" style="font-size:10.5px;text-align:center;line-height:1.2">WiZ: ${wizSceneInfo(l.wizScene).n}</span>`:''}
+    </div>`;
+  const m = runningMode(), hueA = toHS(S.colorA)[0];
+  if (knobBClock()) S.colorB = clockSecond();          // knob B shows the clock's second color while it controls it
+  const hueB = toHS(S.colorB)[0];
+  return `
+  <div class="sec-h"><h2>Console</h2><span class="hint">${S.room==='all'?'Pick a room to see which lights the 4 panel faders control.':'The panel\'s 4 faders control the first 4 lights in this room.'}</span></div>
+  <div class="desk">
+    <div class="stripscroll"><div class="strips" id="stripgrid" style="grid-template-columns:repeat(${ls.length+1},minmax(66px,1fr))">${ls.map(strip).join('')}
+      <div class="strip master">
+        <span class="ch">MAIN</span>
+        <span class="lampdot" style="--c:255,181,71;--lv:${S.master/100}"></span>
+        <span style="height:8px"></span><span style="height:22px"></span>
+        <div class="fader" data-v="master" id="masterf" style="--c:255,181,71;--lv:1" role="slider" tabindex="0" aria-label="Master brightness" aria-valuemin="1" aria-valuemax="100"><div class="track"><div class="fill"></div></div><div class="cap"></div></div>
+        <span class="lvl" id="masterr"></span>
+        <button class="mute" id="allbtn" aria-pressed="${ls.some(l=>l.on)}">ALL</button>
+        <span class="nm">Master</span>
+      </div>
+    </div></div>
+    <div class="deckfoot">
+      <div class="knobwrap"><button class="knob" id="knobA" aria-label="Color A"><span class="cc" id="ccA" style="background:${css(S.colorA)}"></span><span class="ptr" style="transform:rotate(${hueA}deg)"></span></button><span class="label">Color A</span><span class="knobnote">${m?'Mode color 1':'SEL channels'}</span></div>
+      <div class="knobwrap"><button class="knob" id="knobB" aria-label="Color B"><span class="cc" id="ccB" style="background:${css(S.colorB)}"></span><span class="ptr" style="transform:rotate(${hueB}deg)"></span></button><span class="label">Color B</span><span class="knobnote">${m?'Mode color 2':knobBClock()?'Clock 2nd color':'Clock 2nd color when the clock is SEL'}</span></div>
+      <div class="pads">${S.presets.slice(0,4).map((p,i)=>`<button class="pad" data-scene="${i}"><span>${i+1}</span><span class="pl" style="background:${sceneGrad(p)}"></span><span style="font-size:11px;font-weight:600">${p.name}</span></button>`).join('')}</div>
+    </div>
+  </div>`;
+}
+function emptyRoom(){ return `<div class="card"><b>No lights in ${roomName(S.room)} yet</b><span class="hint">Add one in Settings, under Lights.</span><div><button class="btn small" data-gotab="settings">Open Settings</button></div></div>`; }
+
+function lightsNeon(){
+  const ls = roomLights(S.room); if (!ls.length) return emptyRoom();
+  return `<div class="sec-h"><h2>&gt; LIGHTS_</h2><span class="hint">Tap a name to change its color.</span></div>
+  <div class="neongrid">${ls.map(l=>`
+    <div class="ncard" data-l="${l.id}">
+      <div class="row"><button class="nn" data-color="${l.id}" style="background:none;border:0;padding:0;text-align:left">${l.name.toUpperCase()}</button><button class="nbtn" data-on="${l.id}" data-toggle="${l.id}">PWR</button></div>
+      <div class="np" data-r="${l.id}"></div>
+      ${isGrad(l)&&l.type!=='clock' ? segbar(l.id, segsOf(l)) : `<div class="bars" data-bars="${l.id}">${'<i></i>'.repeat(20)}</div>`}
+      <input type="range" min="1" max="100" data-bri="${l.id}" aria-label="${l.name} brightness">
+      <div class="meta">${l.wizScene ? 'WIZ: '+wizSceneInfo(l.wizScene).n.toUpperCase() : TYPES[l.type].label.toUpperCase()} · ${l.ip}</div>
+    </div>`).join('')}</div>
+  <div class="chips">${S.presets.map((p,i)=>`<button class="nbtn" data-scene="${i}" aria-pressed="${S.activeScene===i}" style="font-size:18px">${p.name.toUpperCase()}</button>`).join('')}</div>`;
+}
+
+/* ---------- room map (one layout per room) ---------- */
+const SC = 22;
+function mapRoom(){ return S.room==='all' ? (S.rooms[0]||{}).id : S.room; }
+function layoutOf(r){ if(!S.layouts[r]) S.layouts[r]={w:12,h:12,items:[{k:'door',x:4.5,y:11.4,w:3,h:.5,r:0}]}; return S.layouts[r]; }
+function lightsMap(){
+  const rid = mapRoom(); if (!rid) return emptyRoom();
+  const R = layoutOf(rid), W=R.w*SC, H=R.h*SC, pad=26, ls = roomLights(rid);
+  ls.forEach(l => { if(!S.lampPos[l.id]) S.lampPos[l.id]={x:R.w/2,y:R.h/2}; });
+  const furn = R.items.map((it,idx) => {
+    const w=(it.r%180?it.h:it.w)*SC, h=(it.r%180?it.w:it.h)*SC, x=it.x*SC, y=it.y*SC;
+    let shape = `<rect class="furn" x="${x}" y="${y}" width="${w}" height="${h}" rx="3"/>`;
+    if (it.k==='door') shape = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#0a1520"/><path class="furn" d="M${x} ${y} A ${w} ${w} 0 0 1 ${x+w} ${y-w} L${x+w} ${y}" style="fill:rgba(124,211,255,.05)"/>`;
+    if (it.k==='rug') shape = `<rect class="furn" x="${x}" y="${y}" width="${w}" height="${h}" rx="10" style="stroke-dasharray:2 3"/>`;
+    if (it.k==='bed') shape += `<rect class="furn" x="${x+4}" y="${y+4}" width="${w-8}" height="${Math.min(w,h)*.25}" rx="4"/>`;
+    return `<g class="item ${S.picked===('f'+idx)?'picked':''}" data-pick-item="f${idx}">${shape}<text class="furn-t" x="${x+w/2}" y="${y+h/2}">${FURN_NAMES[it.k]}</text></g>`;
+  }).join('');
+  const lamps = ls.map(l => { const p=S.lampPos[l.id], x=p.x*SC, y=p.y*SC;
+    const core = l.type==='clock' ? `<rect class="lampcore" x="${x-16}" y="${y-7}" width="32" height="14" rx="3" data-l="${l.id}" style="fill:rgb(var(--c))"/>`
+      : l.type==='bulb' ? `<circle class="lampcore" cx="${x}" cy="${y}" r="9" data-l="${l.id}" style="fill:rgba(var(--c),calc(.25 + .75*var(--lv)))"/>`
+      : `<rect class="lampcore" x="${x-20}" y="${y-4}" width="40" height="8" rx="4" data-l="${l.id}" style="fill:rgba(var(--c),calc(.25 + .75*var(--lv)))"/>`;
+    return `<g class="item ${S.picked===('l:'+l.id)?'picked':''} ${!S.editing&&S.sel===l.id?'focus':''}" data-pick-item="l:${l.id}" data-lamp="${l.id}" tabindex="0" role="button" aria-label="${l.name}">
+      <circle data-glow="${l.id}" cx="${x}" cy="${y}" r="40" fill="url(#g-${l.id})" style="pointer-events:none"/>${core}
+      <text class="furn-t" x="${x}" y="${y+20}" style="fill:#e3eef5">${short(l.name)}</text></g>`; }).join('');
+  const defs = ls.map(l=>`<radialGradient id="g-${l.id}"><stop offset="0" data-stop="${l.id}"/><stop offset="1" stop-opacity="0"/></radialGradient>`).join('');
+  const l = byId(S.sel)&&byId(S.sel).room===rid ? byId(S.sel) : ls[0];
+  const pickedName = () => { const p=S.picked; if(p==null) return 'nothing'; if(p.startsWith('l:')) return byId(p.slice(2)).name; return FURN_NAMES[R.items[+p.slice(1)].k]; };
+  const pf = S.picked && S.picked.startsWith('f');
+  return `
+  <div class="sec-h"><h2>${roomName(rid)}</h2><span class="hint">${S.room==='all'?'Showing your first room. Pick a room above to see its map. ':''}${S.editing?'Drag anything to move it. Tap an item, then Rotate or Remove.':'Tap a light to adjust it.'}</span></div>
+  <div class="mapwrap">
+    <div class="blue ${S.editing?'editing':''}">
+      <span class="maptag">${R.w} × ${R.h} FT</span>
+      <svg id="room" viewBox="${-pad} ${-pad} ${W+pad*2} ${H+pad*2}" role="img" aria-label="${roomName(rid)} layout">
+        <defs>${defs}</defs>
+        <rect class="wall" x="0" y="0" width="${W}" height="${H}"/>
+        <text class="dim" x="${W/2}" y="${-10}">${R.w} ft</text>
+        <text class="dim" x="${-12}" y="${H/2}" transform="rotate(-90 ${-12} ${H/2})">${R.h} ft</text>
+        ${furn}${lamps}
+      </svg>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+      ${S.editing ? `
+      <div class="card">
+        <span class="label">Edit ${roomName(rid)}</span>
+        <div class="edit-bar">${Object.keys(FURN_NAMES).map(k=>`<button class="chip" data-add="${k}">+ ${FURN_NAMES[k]}</button>`).join('')}</div>
+        <div class="row"><span>Selected: <b>${pickedName()}</b></span>
+          <span class="chips"><button class="btn small" id="rot" ${pf?'':'disabled'}>Rotate</button><button class="btn small" id="del" ${pf?'':'disabled'}>Remove</button></span></div>
+        <div class="row"><span>Room width</span><span class="chips"><button class="btn small" data-rs="w,-1" aria-label="Narrower">−</button><b class="num">${R.w} ft</b><button class="btn small" data-rs="w,1" aria-label="Wider">+</button></span></div>
+        <div class="row"><span>Room length</span><span class="chips"><button class="btn small" data-rs="h,-1" aria-label="Shorter">−</button><b class="num">${R.h} ft</b><button class="btn small" data-rs="h,1" aria-label="Longer">+</button></span></div>
+        <div class="row"><button class="btn" id="resetroom">Clear furniture</button><button class="btn primary" id="doneedit">Save layout</button></div>
+      </div>` : l ? `
+      <div class="card ledit">
+        <div class="row"><div><div class="label">${l.wizScene ? 'WiZ scene: '+wizSceneInfo(l.wizScene).n : TYPES[l.type].label}</div><div class="bigname">${l.name}</div></div>${sw(l.on,'lon',l.name+' on/off',`data-on="${l.id}" data-toggle="${l.id}"`)}</div>
+        ${isGrad(l)&&l.type!=='clock'?segbar(l.id,segsOf(l)):''}
+        <div class="row"><span>Brightness</span><b class="num" data-r="${l.id}"></b></div>
+        <input type="range" min="1" max="100" data-bri="${l.id}" aria-label="${l.name} brightness">
+        <div class="row"><span>Color</span><button class="swbtn" data-l="${l.id}" data-color="${l.id}" style="background:rgb(var(--c))" aria-label="Pick ${l.name} color"></button></div>
+        <div class="chips">${ls.map(x=>`<button class="chip" data-pick="${x.id}" aria-pressed="${x.id===l.id}"><span class="sw" data-l="${x.id}" style="background:rgb(var(--c))"></span>${short(x.name)}</button>`).join('')}</div>
+      </div>
+      <button class="btn" id="startedit">Edit ${roomName(rid)} layout</button>` : `<div class="card"><span class="hint">No lights here yet.</span><button class="btn" id="startedit">Edit layout</button></div>`}
+    </div>
+  </div>`;
+}
+
+/* ===================== SCENES ===================== */
+function sceneGrad(p){
+  const cs=LIGHTS.filter(l=>p.L[l.id]).flatMap(l=>{const v=p.L[l.id]; if(!v[0]) return ['#222']; const mid=sceneLightMode(p,v); if(mid) return modeById(mid).pal.map(h=>css(hex2rgb(h),.35+.65*v[1]/100)); return [css(v[2],.35+.65*v[1]/100)];}); if(cs.length<2) cs.push(cs[0]||'#222'); return `linear-gradient(90deg,${cs.join(',')})`; }
+function viewScenes(){
+  return `
+  <div class="sec-h"><h2>Scenes</h2><span class="hint">Tap to turn a scene on. Hold and drag to reorder; the first 4 are on the panel's preset buttons. ⋯ to rename, update or delete.</span></div>
+  <div class="scenes" id="scenegrid">${S.presets.map((p,i)=>`
+    <div class="scene ${S.activeScene===i?'active':''}" data-sort data-key="${i}">
+      <button class="sapply" data-scene="${i}">
+        ${i<4?`<span class="badge">BTN ${i+1}</span>`:''}
+        <div class="grad" style="background:${sceneGrad(p)}"></div>
+        <span class="sn">${p.name}</span>
+        ${(()=>{ const ms=[...new Set(Object.values(p.L).map(v=>sceneLightMode(p,v)).filter(Boolean))]; return ms.length?`<span class="hint">▶ ${ms.map(id=>modeById(id).name).join(', ')}</span>`:''; })()}
+        <span class="hint">${LIGHTS.filter(l=>p.L[l.id]).length} lights · ${LIGHTS.filter(l=>p.L[l.id]?.[0]).length} on</span>
+      </button>
+      ${S.sceneMenu===i?`<div class="smenu">
+        <input type="text" value="${p.name.replace(/"/g,'&quot;')}" data-srename="${i}" maxlength="20" aria-label="Scene name">
+        <div class="chips"><button class="btn small primary" data-sedit="${i}">Edit lights</button><button class="btn small" data-over="${i}">Update to now</button><button class="btn small danger" data-delscene="${i}">Delete</button><button class="btn small" data-smore="${i}">Done</button></div>
+      </div>`:`<button class="smore" data-smore="${i}" aria-label="More options for ${p.name}">⋯</button>`}
+    </div>`).join('')}</div>
+  <div class="card">
+    <span class="label">Save what's on now · ${roomName(S.room)}</span>
+    <div class="row" style="flex-wrap:nowrap"><input type="text" id="scname" placeholder="Name, e.g. Study night" maxlength="20"><button class="btn primary" id="scsave">Save</button></div>
+    <div class="row"><span class="hint">Or set each light by hand, without changing what's on now.</span><button class="btn" id="scnew">Build a scene</button></div>
+  </div>`;
+}
+
+/* ---------- scene editor: include/exclude lights, set each one ---------- */
+let sdraft = null;
+function openSceneEditor(i){
+  const src = i==null ? captureScene('') : JSON.parse(JSON.stringify(S.presets[i]));
+  Object.values(src.L).forEach(v=>{ v[3]=sceneLightMode(src,v)||0; });   // older scenes kept one mode for the whole scene
+  sdraft = {i, name:src.name, L:src.L};
+  renderSceneEditor();
+}
+function renderSceneEditor(){
+  const d=sdraft, n=Object.keys(d.L).filter(byId).length, dm=d.mode&&modeById(d.mode);
+  const row = l => { const v=d.L[l.id], inc=!!v, lm=inc&&v[3]&&modeById(v[3]);
+    return `<div class="srow ${inc?'':'excluded'}">
+      <div class="row"><span><b>${l.name}</b> <span class="hint">${TYPES[l.type].label}</span></span>${sw(inc,'sinc-'+l.id,'Include '+l.name+' in this scene',`data-sinc="${l.id}"`)}</div>
+      ${inc?`<div class="ctl">
+        ${lm ? `<button class="swbtn" data-scol="${l.id}" style="background:${modeGradCss(lm)}" aria-label="${l.name} runs ${lm.name}. Tap to give it a fixed color instead"></button>`
+                   : `<button class="swbtn" data-scol="${l.id}" style="background:${css(v[2])}" aria-label="${l.name} color in this scene"></button>`}
+        <div class="seg" role="group" aria-label="${l.name} on or off"><button data-son="${l.id}" data-val="1" aria-pressed="${!!v[0]}">On</button><button data-son="${l.id}" data-val="0" aria-pressed="${!v[0]}">Off</button></div>
+        <input type="range" min="1" max="100" value="${v[1]}" data-sbri="${l.id}" ${v[0]?'':'disabled'} aria-label="${l.name} brightness in this scene">
+        <b class="num" id="sbv-${l.id}">${v[0]?v[1]+'%':'off'}</b>
+      </div>
+      ${v[0]?`<div class="row"><span class="hint">Dynamic mode</span><select data-smsel="${l.id}" aria-label="${l.name} dynamic mode in this scene"><option value="">None: fixed color</option>${S.modes.map(m=>`<option value="${m.id}" ${v[3]===m.id?'selected':''}>${m.name}</option>`).join('')}</select></div>`:''}`:`<span class="hint">Left out: this light stays as it is when the scene turns on.</span>`}
+    </div>`; };
+  $('#editorRoot').innerHTML = `<div class="backdrop" id="sbd"><div class="sheet tall" role="dialog" aria-modal="true" aria-label="Edit scene">
+    <div class="row"><b class="bigname" style="font-size:22px">${d.i==null?'New scene':'Edit scene'}</b><button class="btn small" id="scancel">Cancel</button></div>
+    <input type="text" id="sname" value="${d.name.replace(/"/g,'&quot;')}" placeholder="Name, e.g. Study night" maxlength="20" aria-label="Scene name">
+    <div class="sgrad" id="sgrad" style="background:${sceneGrad(d)}"></div>
+    <span class="hint">Each light can hold a fixed color or run any of your dynamic modes. Different lights can run different modes. Make or change modes in the Modes tab.</span>
+    <div class="row"><span class="hint">${n} of ${LIGHTS.length} lights in this scene</span><span class="chips"><button class="btn small" id="sall">Include all</button><button class="btn small" id="snone">Leave all out</button></span></div>
+    ${S.rooms.map(r=>{ const ls=roomLights(r.id); return ls.length?`<div class="label" style="margin-top:4px">${r.name}</div>${ls.map(row).join('')}`:''; }).join('')}
+    <div class="row" style="margin-top:6px">${d.i==null?'<span></span>':`<button class="btn danger" id="sdel">Delete scene</button>`}<span class="chips"><button class="btn" id="stry">Try it</button><button class="btn primary" id="ssave">Save</button></span></div>
+  </div></div>`;
+  const E=$('#editorRoot'), close=()=>{ sdraft=null; E.innerHTML=''; render(); };
+  const regrad=()=>{ $('#sgrad').style.background=sceneGrad(d); };
+  $('#sname').oninput=e=>d.name=e.target.value;
+  $('#scancel').onclick=close; $('#sbd').onclick=e=>{ if(e.target.id==='sbd') close(); };
+  const fresh = l => [l.on?1:0, l.bri, l.c.slice(), S.lightModes[l.id]&&modeById(S.lightModes[l.id])?S.lightModes[l.id]:0];
+  $('#sall').onclick=()=>{ LIGHTS.forEach(l=>{ if(!d.L[l.id]) d.L[l.id]=fresh(l); }); renderSceneEditor(); };
+  $('#snone').onclick=()=>{ d.L={}; renderSceneEditor(); };
+  E.querySelectorAll('[data-smsel]').forEach(s=>s.onchange=()=>{ d.L[s.dataset.smsel][3]=s.value||0; renderSceneEditor(); });
+  E.querySelectorAll('[data-sinc]').forEach(b=>b.onclick=()=>{ const id=b.dataset.sinc, l=byId(id);
+    if (d.L[id]) delete d.L[id]; else d.L[id]=fresh(l); renderSceneEditor(); });
+  E.querySelectorAll('[data-son]').forEach(b=>b.onclick=()=>{ d.L[b.dataset.son][0]=+b.dataset.val; renderSceneEditor(); });
+  E.querySelectorAll('[data-sbri]').forEach(r=>r.oninput=()=>{ const v=d.L[r.dataset.sbri]; v[1]=+r.value; $('#sbv-'+r.dataset.sbri).textContent=v[1]+'%'; regrad(); });
+  E.querySelectorAll('[data-scol]').forEach(b=>b.onclick=()=>{ const id=b.dataset.scol, v=d.L[id];
+    if (v[3]) { v[3]=0; b.style.background=css(v[2]); }
+    sheet(`${byId(id).name} in this scene`, v[2], c=>{ v[2]=c; b.style.background=css(c); regrad(); }, ()=>renderSceneEditor()); });
+  $('#stry').onclick=()=>{ applySceneData(d); S.activeScene=null; save(); render(); toast('Showing this scene. Not saved yet.'); };
+  $('#ssave').onclick=()=>{
+    if (!Object.keys(d.L).length) { toast('Include at least one light'); return; }
+    const sc={name:d.name.trim()||`Scene ${S.presets.length+1}`, L:d.L};
+    if (d.i==null) S.presets.push(sc); else S.presets[d.i]=sc;
+    sdraft=null; E.innerHTML=''; save(); render(); toast(`Saved ${sc.name}`);
+  };
+  const del=$('#sdel'); if(del) del.onclick=()=>{
+    if (!del.dataset.armed) { del.dataset.armed='1'; del.textContent='Tap again to delete'; return; }
+    const nm=S.presets[d.i].name; S.presets.splice(d.i,1); S.activeScene=null; sdraft=null; E.innerHTML=''; save(); render(); toast(`Deleted ${nm}`);
+  };
+}
+
+/* ===================== MODES ===================== */
+const WIZ = [['Ocean',1],['Romance',2],['Sunset',3],['Party',4],['Fireplace',5],['Cozy',6],['Forest',7],['Pastel',8],['Wake up',9],['Bedtime',10],['Night light',14],['Focus',15],['Relax',16],['TV time',18],['Club',26],['Candlelight',29],['Golden white',30],['Pulse',31]];
+// WiZ's built-in scenes: name, approximate colors for the app's preview, and whether they move.
+// (Lamps only report the scene number while a scene runs, not its colors.)
+const WIZ_SCENES = {
+  1:{n:'Ocean',pal:['0050ff','00c8d2','0a2a9a'],dyn:1}, 2:{n:'Romance',pal:['ff2878','ff5a5a','b4146e'],dyn:1},
+  3:{n:'Sunset',pal:['ff5a14','ff2a3c','8a2bff'],dyn:1}, 4:{n:'Party',pal:['ff0040','ffd200','00e05a','1e5bff','c800ff'],dyn:1},
+  5:{n:'Fireplace',pal:['ff5000','ff9a1e'],dyn:1,flicker:1}, 6:{n:'Cozy',pal:['ff8c3c']}, 7:{n:'Forest',pal:['28c83c','0a6e28','8cd246'],dyn:1},
+  8:{n:'Pastel colors',pal:['ffaadc','aad2ff','c8ffaa','ffe6a0'],dyn:1}, 9:{n:'Wake up',pal:['ffbe78']}, 10:{n:'Bedtime',pal:['ff7832']},
+  11:{n:'Warm white',pal:['ffaa5a']}, 12:{n:'Daylight',pal:['ffe6d2']}, 13:{n:'Cool white',pal:['ebf0ff']}, 14:{n:'Night light',pal:['ff5a14']},
+  15:{n:'Focus',pal:['ebf0ff']}, 16:{n:'Relax',pal:['ffbe78']}, 17:{n:'True colors',pal:['fff0e6']}, 18:{n:'TV time',pal:['5a50ff']},
+  19:{n:'Plant growth',pal:['c832ff','ff3caa']}, 20:{n:'Spring',pal:['8cff64','ffaadc','fff08c'],dyn:1}, 21:{n:'Summer',pal:['ffdc32','00c8ff','ff8c28'],dyn:1},
+  22:{n:'Fall',pal:['ff6414','c81e0a','ffb428'],dyn:1}, 23:{n:'Deep dive',pal:['0028c8','0096b4','14146e'],dyn:1}, 24:{n:'Jungle',pal:['14b432','b4dc28','0a6e3c'],dyn:1},
+  25:{n:'Mojito',pal:['3cdc78','00b4a0','c8ff8c'],dyn:1}, 26:{n:'Club',pal:['ff00c8','00ffe6','6400ff'],dyn:1}, 27:{n:'Christmas',pal:['ff1e1e','14c83c','fff0c8'],dyn:1},
+  28:{n:'Halloween',pal:['ff6400','8c00ff'],dyn:1}, 29:{n:'Candlelight',pal:['ff8c1e','ffb450'],dyn:1,flicker:1}, 30:{n:'Golden white',pal:['ffc878']},
+  31:{n:'Pulse',pal:['ff3c3c','5a0a0a'],dyn:1}, 32:{n:'Steampunk',pal:['ffa028','00a0a0','8c4614'],dyn:1},
+};
+function wizSceneInfo(id){
+  if (WIZ_SCENES[id]) return WIZ_SCENES[id];
+  if (id>=256 && id<=265) return {n:'WiZ custom mode', pal:['8a8f99','c9ced6','5b616c'], dyn:1};
+  return {n:'WiZ scene '+id, pal:['c9ced6']};
+}
+const WIZ_COLOR = {1:[0,110,255],2:[255,40,120],3:[255,90,20],4:[200,0,255],5:[255,80,0],6:[255,140,60],7:[40,200,60],8:[255,170,220],9:[255,190,120],10:[255,120,50],14:[255,90,20],15:[235,240,255],16:[255,190,120],18:[90,80,255],26:[0,255,230],29:[255,130,30],30:[255,200,120],31:[255,60,60]};
+function modeCard(m){
+  const run = activeModeIds().includes(m.id);
+  return `<div class="mcard ${run?'running':''}" data-sort data-key="${m.id}">
+    <div class="segbar" data-mprev="${m.id}" style="--n:24" aria-hidden="true">${'<i></i>'.repeat(24)}</div>
+    <div class="mt"><b>${m.name}</b><span class="hint">${m.grad?GRADS.find(g=>g[0]===m.grad)[1]:'No gradient'} · ${LOOPS.find(x=>x[0]===m.loop)[1]}</span></div>
+    <div class="row"><span class="chips">${m.pal.map(h=>`<span class="chip" style="padding:0;min-height:0;width:18px;height:18px;background:#${h};border-color:transparent" aria-label="#${h}"></span>`).join('')}</span><span class="hint">${roomName(m.room)}</span></div>
+    <div class="row"><button class="btn small" data-editmode="${m.id}">Edit</button><button class="btn small ${run?'':'primary'}" data-runmode="${m.id}">${run?'Stop':'Run'}</button></div>
+  </div>`;
+}
+function viewModes(){
+  const wizLights = LIGHTS.filter(l=>TYPES[l.type].wiz), wl = wizLights.find(l=>l.id===S.sel) || wizLights[0];
+  return `
+  ${HUB.live?LIVE_NOTE_MODES:''}
+  <div class="sec-h"><h2>Dynamic modes</h2><span class="hint">Like the WiZ app's light modes. Gradient lights (clock, strips) show the colors along their length; bulbs cycle or hold a color.</span></div>
+  <div class="mgrid" id="modegrid">${S.modes.map(modeCard).join('')}<button class="newmode" id="newmode">+ New mode</button></div>
+  <span class="hint">Hold a mode and drag to reorder.</span>
+  <div class="sec-h"><h2>Quick effects</h2><span class="hint">Simple effects for any light, run by the hub.</span></div>
+  <div class="fxgrid">${FX.map(f=>`<button class="fx" data-fx="${f.id}" aria-pressed="${S.fx===f.id}"><div class="pv" style="background:${f.id==='music'?musicGrad():f.pv}"></div><b>${f.name}</b><span>${f.id==='music'?'Pulse and step through your colors on the beat':f.d}</span></button>`).join('')}</div>
+  <div class="grid2">
+    <div class="card">
+      <span class="label">Quick effects apply to</span>
+      <div class="chips">${LIGHTS.map(l=>`<button class="chip" data-tgt="${l.id}" aria-pressed="${S.fxTargets.includes(l.id)}"><span class="sw" data-l="${l.id}" style="background:rgb(var(--c))"></span>${l.name}</button>`).join('')}</div>
+      <div class="row"><span>Speed</span><span class="hint" id="spl"></span></div>
+      <input type="range" id="speed" min="5" max="150" value="${S.speed}" aria-label="Quick effect speed">
+    </div>
+    <div class="card">
+      <div class="row"><span class="label">Music sync</span><span class="hint">${S.fx==='music'?'Listening · 120 BPM':'Off'}</span></div>
+      <div class="meter" id="meter">${'<i></i>'.repeat(16)}</div>
+      <div class="row"><span>Colors</span><span class="hint">One step per beat</span></div>
+      <div class="pal">${S.musicPal.map((h,i)=>`<div class="palc"><button class="b" data-mcol="${i}" style="background:#${h}" aria-label="Music color ${i+1}, #${h}">${S.musicPal.length>2?`<span class="x" data-mrem="${i}" role="button" aria-label="Remove music color ${i+1}">×</span>`:''}</button>${i+1}</div>`).join('')}
+        ${S.musicPal.length<6?`<div class="palc"><button class="add" id="madd" aria-label="Add a music color">+</button>Add</div>`:''}</div>
+      <div class="chips"><button class="chip" id="mknobs">Use knob A and B colors</button></div>
+      <div class="seg" role="group" aria-label="Sound source"><button data-src="phone" aria-pressed="${S.musicSrc==='phone'}">Phone mic</button><button data-src="panel" aria-pressed="${S.musicSrc==='panel'}">Panel mic</button></div>
+      <span class="hint">${S.musicSrc==='phone'?'Uses this phone\'s microphone. Works on the online (HTTPS) copy of the app.':'Needs the INMP441 mic on the panel. Not installed yet, so the hub falls back to the phone mic.'}</span>
+      <div class="row"><span>Sensitivity</span><b class="num">${S.sens}%</b></div>
+      <input type="range" id="sens" min="10" max="100" value="${S.sens}" aria-label="Music sensitivity">
+      <div class="row"><span>Tempo without the mic</span><b class="num" id="bpmv">${S.bpm||120} BPM</b></div>
+      <input type="range" id="bpm" min="60" max="180" value="${S.bpm||120}" aria-label="Tempo when the mic isn't used">
+      <span class="hint" id="micnote">${!HUB.live ? 'Demo: beats are simulated here.'
+        : !window.isSecureContext ? 'The phone mic only works on the online (HTTPS) copy of the app, coming next. Here the hub pulses at the tempo above.'
+        : S.musicSrc==='phone' ? 'Listening to this phone\'s mic while Music sync runs. Without beats for 3 s, the hub falls back to the tempo above.'
+        : 'Panel mic isn\'t installed yet, so the hub pulses at the tempo above.'}</span>
+    </div>
+  </div>
+  ${wl?`<div class="card">
+    <div class="row"><span class="label">WiZ built-in scenes</span><span class="hint">The lamp runs these on its own.</span></div>
+    <div class="chips">${wizLights.map(l=>`<button class="chip" data-pick="${l.id}" aria-pressed="${l.id===wl.id}">${l.name}</button>`).join('')}</div>
+    <div class="chips">${WIZ.map(([n,id])=>`<button class="chip" data-wiz="${id}" data-wizl="${wl.id}"><span class="sw" style="background:${css(WIZ_COLOR[id])}"></span>${n}</button>`).join('')}</div>
+  </div>`:''}`;
+}
+
+/* ---------- mode editor ---------- */
+function openEditor(m){
+  draft = m ? JSON.parse(JSON.stringify(m)) : {id:'m'+Date.now(), name:'', pal:[rgb2hex(S.colorA), rgb2hex(S.colorB)], loop:'gradual', grad:'flow', speed:50, room:S.room, roles:{}, isNew:true};
+  renderEditor();
+}
+function renderEditor(){
+  const d=draft, targets=roomLights(d.room), bulbs=targets.filter(l=>!isGrad(l)), grads=targets.filter(isGrad);
+  $('#editorRoot').innerHTML = `<div class="backdrop" id="ebd"><div class="sheet tall" role="dialog" aria-modal="true" aria-label="Edit light mode">
+    <div class="row"><b class="bigname" style="font-size:22px">${d.isNew?'New light mode':'Edit light mode'}</b><button class="btn small" id="ecancel">Cancel</button></div>
+    <input type="text" id="ename" value="${d.name.replace(/"/g,'&quot;')}" placeholder="Name, e.g. Ember" maxlength="24" aria-label="Mode name">
+    <div class="prevbox" aria-label="Live preview">${segbar('__draft',30)}<span class="bulb" id="dbulb"></span></div>
+    <span class="hint">Preview: strip on the left, a bulb on the right.</span>
+    <div class="label">Colors</div>
+    <div class="pal">${d.pal.map((h,i)=>`<div class="palc"><button class="b" data-pcol="${i}" style="background:#${h}" aria-label="Color ${i+1}, #${h}">${i>1?`<span class="x" data-prem="${i}" role="button" aria-label="Remove color ${i+1}">×</span>`:''}</button>${i===0?'Knob A':i===1?'Knob B':'Color '+(i+1)}</div>`).join('')}
+      ${d.pal.length<6?`<div class="palc"><button class="add" id="padd" aria-label="Add a color">+</button>Add</div>`:''}</div>
+    <div class="label">Color-loop effect</div>
+    <div class="tiles">${LOOPS.map(([k,n,ds])=>`<button class="tile" data-loop="${k}" aria-pressed="${d.loop===k}" title="${ds}">${n}</button>`).join('')}</div>
+    <div class="row"><span class="label">Gradient effect</span>${sw(!!d.grad,'egrad','Gradient effect')}</div>
+    ${d.grad?`<div class="tiles">${GRADS.map(([k,n])=>`<button class="tile" data-grad="${k}" aria-pressed="${d.grad===k}"><svg viewBox="0 0 56 22" aria-hidden="true">${GRAD_ICON[k]}</svg>${n}</button>`).join('')}</div>`:`<span class="hint">Off: gradient lights use the color-loop too.</span>`}
+    <div class="row"><span class="label">Speed</span><span class="hint num" id="espv">${d.speed}</span></div>
+    <input type="range" id="espeed" min="5" max="150" value="${d.speed}" aria-label="Mode speed">
+    <div class="row"><span class="label">Room</span><select id="eroom" aria-label="Room">${[{id:'all',name:'All rooms'},...S.rooms].map(r=>`<option value="${r.id}" ${d.room===r.id?'selected':''}>${r.name}</option>`).join('')}</select></div>
+    <span class="hint">Gradient: ${grads.map(l=>l.name).join(', ')||'none'}.</span>
+    ${bulbs.length?`<div class="label">Single-color lights</div>
+    ${bulbs.map(l=>`<div class="row"><span>${l.name}</span><select data-role="${l.id}" aria-label="${l.name} role">
+      <option value="loop" ${(d.roles[l.id]||'loop')==='loop'?'selected':''}>Cycle through colors</option>
+      ${d.pal.map((h,i)=>`<option value="c${i}" ${d.roles[l.id]==='c'+i?'selected':''}>Hold color ${i+1}</option>`).join('')}
+      <option value="off" ${d.roles[l.id]==='off'?'selected':''}>Off</option></select></div>`).join('')}`:''}
+    <div class="row">${d.isNew?'<span></span>':`<button class="btn danger" id="edel">Delete mode</button>`}<button class="btn primary" id="esave">Save and run</button></div>
+  </div></div>`;
+  const E = $('#editorRoot');
+  $('#ename').oninput = e => d.name = e.target.value;
+  E.querySelectorAll('[data-loop]').forEach(b=>b.onclick=()=>{ d.loop=b.dataset.loop; renderEditor(); });
+  E.querySelectorAll('[data-grad]').forEach(b=>b.onclick=()=>{ d.grad=b.dataset.grad; renderEditor(); });
+  $('#egrad').onclick=()=>{ d.grad = d.grad?null:'flow'; renderEditor(); };
+  $('#espeed').oninput=e=>{ d.speed=+e.target.value; $('#espv').textContent=d.speed; };
+  $('#eroom').onchange=e=>{ d.room=e.target.value; renderEditor(); };
+  E.querySelectorAll('[data-role]').forEach(s=>s.onchange=()=>{ d.roles[s.dataset.role]=s.value; });
+  E.querySelectorAll('[data-pcol]').forEach(b=>b.onclick=e=>{
+    if (e.target.dataset.prem) { d.pal.splice(+e.target.dataset.prem,1); Object.keys(d.roles).forEach(k=>{ if(d.roles[k].startsWith('c') && +d.roles[k].slice(1)>=d.pal.length) d.roles[k]='loop'; }); renderEditor(); return; }
+    const i=+b.dataset.pcol; sheet(`Color ${i+1}`, hex2rgb(d.pal[i]), c=>{ d.pal[i]=rgb2hex(c); b.style.background='#'+d.pal[i]; }, ()=>renderEditor()); });
+  const pa=$('#padd'); if(pa) pa.onclick=()=>{ const last=hex2rgb(d.pal[d.pal.length-1]); d.pal.push(rgb2hex(hsv((toHS(last)[0]+60)%360))); renderEditor(); };
+  const close=()=>{ draft=null; E.innerHTML=''; render(); };
+  $('#ecancel').onclick=close; $('#ebd').onclick=e=>{ if(e.target.id==='ebd') close(); };
+  $('#esave').onclick=()=>{
+    if(!d.name.trim()) d.name = 'My mode '+(S.modes.length+1);
+    delete d.isNew; const i=S.modes.findIndex(m=>m.id===d.id);
+    if (i>=0) S.modes[i]=d; else S.modes.push(d);
+    runMode(d.id); draft=null; E.innerHTML=''; save(); render(); toast(`${d.name} running`);
+  };
+  const del=$('#edel'); if(del) del.onclick=()=>{
+    if (del.dataset.armed) { S.modes=S.modes.filter(m=>m.id!==d.id); stopMode(d.id); draft=null; E.innerHTML=''; save(); render(); toast(`Deleted ${d.name}`); }
+    else { del.dataset.armed='1'; del.textContent='Tap again to delete'; }
+  };
+  collectDraft();
+}
+let draftEls=null;
+function collectDraft(){ draftEls={bar:$('[data-segs="__draft"]'), bulb:$('#dbulb')}; }
+function paintDraft(t){
+  if(!draftEls||!draftEls.bar) return;
+  const kids=draftEls.bar.children, n=kids.length;
+  for(let k=0;k<n;k++){ const [c,v]=gradColor(draft,k/(n-1),t,0); kids[k].style.background=`rgb(${c.map(x=>Math.round(x*(.1+.9*v))).join(',')})`; }
+  const [bc,bv]=loopColor(draft,t,0); draftEls.bulb.style.setProperty('--c',bc.map(Math.round).join(',')); draftEls.bulb.style.setProperty('--lv',bv.toFixed(3));
+}
+const modeGradCss = m => `linear-gradient(90deg,${m.pal.map(h=>'#'+h).join(',')}${m.pal.length<2?',#'+m.pal[0]:''})`;
+// Run a mode on every light in its room (from the Modes tab / editor)
+function runMode(id){ const m=modeById(id); if(!m) return; S.fx=null;
+  roomLights(m.room).forEach(l=>S.lightModes[l.id]=id); S.lastMode=id;
+  S.colorA=hex2rgb(m.pal[0]); S.colorB=hex2rgb(m.pal[1]||m.pal[0]); S.activeScene=null; }
+function stopMode(id){ Object.keys(S.lightModes).forEach(k=>{ if(S.lightModes[k]===id) delete S.lightModes[k]; }); }
+// Set or clear one light's mode (color picker, scenes)
+function setLightMode(lid, mid){ if (mid && modeById(mid)) { S.lightModes[lid]=mid; S.lastMode=mid; const m=modeById(mid); S.colorA=hex2rgb(m.pal[0]); S.colorB=hex2rgb(m.pal[1]||m.pal[0]); S.fx=null; } else delete S.lightModes[lid]; S.activeScene=null; }
+function paintModeCards(t){
+  $$('[data-mprev]').forEach(bar=>{ const m=modeById(bar.dataset.mprev); if(!m) return; const kids=bar.children,n=kids.length;
+    for(let k=0;k<n;k++){ const [c,v]=gradColor(m,k/(n-1),t,0); kids[k].style.background=`rgb(${c.map(x=>Math.round(x*(.1+.9*v))).join(',')})`; } });
+}
+
+/* ===================== CLOCK (LED-accurate, mirrors led_clock_sinric.ino) ===================== */
+const CFX=[['solid','Solid'],['snake','Snake'],['breathe','Breathe'],['breathe2','Two-color breathe'],['snake2','Two-color snake'],['rainbow','Rainbow'],['fire','Fire'],['music','Music']];
+const DW=60, DH=110, DGAP=20, CLW=24;
+const CORNER={TL:[0,0],TR:[1,0],ML:[0,.5],MR:[1,.5],BL:[0,1],BR:[1,1]};
+const SEG_ENDS={a:['TL','TR'],b:['TR','MR'],c:['MR','BR'],d:['BL','BR'],e:['ML','BL'],f:['TL','ML'],g:['ML','MR']};
+const STROKE_STR=['aTL bTR cMR dBR eBL fML','bTR cMR','aTL bTR gMR eML dBL','aTL bTR gMR cMR dBR','fTL gML bTR cMR',
+  'aTR fTL gML cMR dBR','aTR fTL eML dBL cBR gMR','aTL bTR cMR','fML aTL bTR gMR eML dBL cBR','gMR fML aTL bTR cMR dBR','gML'];
+const STROKES=STROKE_STR.map(s=>s.split(' ').map(x=>[x[0],x.slice(1)]));
+const DIGIT_X=[0, DW+DGAP, 2*DW+3*DGAP+CLW, 3*DW+4*DGAP+CLW], COLON_X=2*DW+2*DGAP+CLW/2, CLOCK_W=4*DW+4*DGAP+CLW;
+function segLeds(ox, seg, from){ const [e1,e2]=SEG_ENDS[seg], to=from===e1?e2:e1, A=CORNER[from], B=CORNER[to], out=[];
+  for(let i=0;i<5;i++){ const f=.14+.72*(i+.5)/5; out.push([ox+(A[0]+(B[0]-A[0])*f)*DW, (A[1]+(B[1]-A[1])*f)*DH]); } return out; }
+const GHOSTS=[]; DIGIT_X.forEach(ox=>Object.keys(SEG_ENDS).forEach(s=>GHOSTS.push(...segLeds(ox,s,SEG_ENDS[s][0])))); GHOSTS.push([COLON_X,DH*.3],[COLON_X,DH*.7]);
+const sin8=x=>128+127*Math.sin(x/256*2*Math.PI);
+function clockChars(){
+  const n=new Date(), left=S.sched.sleepEnd-Date.now();
+  if (S.clock.alarmFx && left>0) { const m=Math.floor(left/60000), s=Math.floor(left/1000)%60; return {ch:(String(m).padStart(2,'0')+String(s).padStart(2,'0')).split(''), colon:true, timer:true}; }
+  let h=n.getHours(); if(!S.clock.h24) h=h%12||12;
+  const hs=String(h).padStart(2,'0'), ms=String(n.getMinutes()).padStart(2,'0'), ch=[hs[0],hs[1],ms[0],ms[1]];
+  if(ch[0]==='0' && !S.clock.lead) ch[0]=' ';
+  return {ch, colon:!S.clock.blink || n.getSeconds()%2===0};
+}
+function clockPath(){ const {ch,colon,timer}=clockChars(), path=[];
+  ch.forEach((c,d)=>{ if(c!==' ') STROKES[+c].forEach(([s,f])=>segLeds(DIGIT_X[d],s,f).forEach(p=>path.push({p,d,lit:true})));
+    if(d===1){ path.push({p:[COLON_X,DH*.3],d:'c',lit:colon}); path.push({p:[COLON_X,DH*.7],d:'c',lit:colon}); } });
+  return {path,timer}; }
+function clockLed(k,n,ms,base,second){
+  const C=S.clock, t=ms*C.speed/64, f=C.fx;
+  if(f==='snake'){ const len=30, head=Math.floor(t/15)%n, dist=(head+n-k)%n; return [base,(dist<len?255-dist*200/len:45)/255]; }
+  if(f==='snake2'){ const len=30, head=Math.floor(t/15)%n, dist=(head+n-k)%n; if(dist>=len) return [second,1]; return [mix(second,base,1-dist/len),1]; }
+  if(f==='breathe') return [base,(70+sin8(t/12)*185/255)/255];
+  if(f==='breathe2'){ const p=t/12, pulse=Math.floor((p+64)/256); return [pulse&1?second:base,(15+sin8(p)*240/255)/255]; }
+  if(f==='rainbow') return [hsv((k/n*360 + t/30)%360),1];
+  if(f==='fire'){ const z=noise(ms/1000*3.2*C.speed/128 + k*1.9); return [hsv(4+26*(.5+.5*z)),.35+.65*(.5+.5*z)]; }
+  if(f==='music') return [musicColor(Math.floor(k/n*S.musicPal.length)),.15+.85*beat.env];
+  return [base,1];
+}
+function drawClock(ms){
+  const cv=$('#clockcv'), cl=byId('clock'); if(!cv||!cl) return;
+  const dpr=window.devicePixelRatio||1, cssW=cv.clientWidth||420, pad=14, sc=cssW/(CLOCK_W+pad*2), cssH=(DH+pad*2)*sc;
+  if(cv.width!==Math.round(cssW*dpr)){ cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr); cv.style.height=cssH+'px'; }
+  const g=cv.getContext('2d'); g.setTransform(dpr*sc,0,0,dpr*sc,pad*dpr*sc,pad*dpr*sc); g.clearRect(-pad,-pad,CLOCK_W+pad*2,DH+pad*2);
+  const L=7; g.shadowBlur=0; g.fillStyle='rgba(255,255,255,.055)';
+  GHOSTS.forEach(([x,y])=>{ g.beginPath(); g.roundRect?g.roundRect(x-L/2,y-L/2,L,L,2):g.rect(x-L/2,y-L/2,L,L); g.fill(); });
+  if(!cl.on) return;
+  const bri=Math.sqrt((cl.bri/100)*(S.master/100)), {path,timer}=clockPath(), n=path.length, m=modeOfLight('clock'), useMode=!!m, second=clockSecond();
+  path.forEach((led,k)=>{
+    if(!led.lit) return;
+    const base = timer?[255,255,255] : hex2rgb(led.d==='c'?S.clock.colon:S.clock.dc[led.d]);
+    let [c,v] = useMode&&!timer ? gradColor(m,k/(n-1),ms/1000,0) : clockLed(k,n,ms,base,second); v*=bri;
+    g.shadowBlur=14*v; g.shadowColor=`rgba(${c.map(Math.round).join(',')},.9)`; g.fillStyle=`rgb(${c.map(x=>Math.round(x*v)).join(',')})`;
+    const [x,y]=led.p; g.beginPath(); g.roundRect?g.roundRect(x-L/2,y-L/2,L,L,2):g.rect(x-L/2,y-L/2,L,L); g.fill();
+  });
+}
+function viewClock(){
+  const C=S.clock, m=modeOfLight('clock'), dnames=['Hour','Hour',':','Min','Min'];
+  return `
+  <div class="sec-h"><h2>LED clock</h2><span class="hint">All 142 LEDs, using the clock's own animation math. Animations run on the clock itself.</span></div>
+  <div class="clockprev"><canvas id="clockcv" role="img" aria-label="Preview of the clock's 142 LEDs" style="width:100%;max-width:520px;display:block"></canvas></div>
+  ${m?`<div class="card" style="padding:10px 14px"><span><b>${m.name}</b> <span class="hint">is running, so the clock shows the mode's gradient along its writing path. Stop the mode to use the settings below.</span></span></div>`:''}
+  <div class="grid2">
+    <div class="card">
+      <div class="row"><span class="label">Digit colors</span><span class="row" style="gap:8px"><span class="hint">Hours / minutes as pairs</span>${sw(C.link,'clink','Color hours and minutes as pairs')}</span></div>
+      <div class="dchips">${[0,1,'c',2,3].map((d,i)=>`<button class="dchip" data-dc="${d}"><i style="background:#${d==='c'?C.colon:C.dc[d]}"></i>${dnames[i]}</button>`).join('')}</div>
+      <div class="chips"><button class="chip" id="dcall">Match all to main color</button><button class="chip" id="dcsplit">Warm hours, cool minutes</button></div>
+    </div>
+    <div class="card">
+      <span class="label">Display</span>
+      <div class="row"><span>24-hour time</span>${sw(C.h24,'ch24','24-hour time')}</div>
+      <div class="row"><span>Leading zero (09:05)</span>${sw(C.lead,'clead','Leading zero')}</div>
+      <div class="row"><span>Blink the colon</span>${sw(C.blink,'cblink','Blink colon')}</div>
+      <div class="row"><span>Flash and count down for alarms and timers</span>${sw(C.alarmFx,'calarm','Alarm flash and countdown')}</div>
+    </div>
+  </div>
+  <div class="card">
+    <span class="label">Clock animation</span>
+    <div class="chips">${CFX.map(([id,n])=>`<button class="chip" data-cfx="${id}" aria-pressed="${C.fx===id}">${n}</button>`).join('')}</div>
+    <div class="row"><span>Speed</span><span class="hint num" id="cspl">${C.speed} / 255</span></div>
+    <input type="range" id="cspeed" min="1" max="255" value="${C.speed}" aria-label="Clock animation speed">
+    <div class="row"><span>When the minute changes</span><div class="seg" role="group" aria-label="Minute transition">${['none','wipe','melt'].map(k=>`<button data-trans="${k}" aria-pressed="${C.trans===k}">${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}</div></div>
+  </div>
+  <div class="card">
+    <div class="row"><span class="label">Second color</span><span class="row" style="gap:10px"><span class="hint">Two-color breathe and snake</span><span class="swbtn" style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,${css(clockBase())} 0 50%,${css(clockSecond())} 50% 100%)" aria-hidden="true"></span></span></div>
+    <div class="seg" role="group" aria-label="Second color"><button data-c2m="1" aria-pressed="${C.c2auto!==false}">Match main color</button><button data-c2m="0" aria-pressed="${C.c2auto===false}">Custom</button></div>
+    ${C.c2auto!==false ? `<div class="row hint"><span>Darker</span><span>Shade <b class="num" id="cshv">${C.shade??90}</b></span><span>Lighter</span></div>
+      <input type="range" id="cshade" min="-200" max="230" value="${C.shade??90}" aria-label="Second color shade">`
+      : `<div class="row"><span>Color</span><button class="swbtn" id="c2pick" style="background:#${C.c2||'0040ff'}" aria-label="Pick the clock's second color"></button></div>`}
+    <span class="hint">This is the clock's own second color, the same one as on its page and in your remote presets.</span>
+  </div>`;
+}
+
+/* ===================== SCHEDULE ===================== */
+const DAYS=['S','M','T','W','T','F','S'];
+function viewSched(){
+  const W=S.sched.wake, N=S.sched.night, D=S.sched.dim, left=Math.max(0,S.sched.sleepEnd-Date.now());
+  return `
+  ${HUB.live?LIVE_NOTE_SCHED:''}
+  <div class="sec-h"><h2>Schedule</h2><span class="hint">The hub keeps time over the internet, so these run even when your phone is off.</span></div>
+  <div class="grid2">
+    <div class="card">
+      <div class="row"><span class="label">Sunrise wake-up</span>${sw(W.on,'won','Sunrise wake-up')}</div>
+      <div class="row"><span>Lights reach full at</span><input type="time" id="wtime" value="${W.time}" aria-label="Wake-up time"></div>
+      <div class="chips" role="group" aria-label="Days">${DAYS.map((d,i)=>`<button class="chip" data-day="${i}" aria-pressed="${W.days.includes(i)}" aria-label="${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][i]}" style="width:38px;justify-content:center;padding:0">${d}</button>`).join('')}</div>
+      <div class="row"><span>Fade in over</span><div class="seg" role="group" aria-label="Fade length">${[10,20,30].map(m=>`<button data-fade="${m}" aria-pressed="${W.fade===m}">${m} min</button>`).join('')}</div></div>
+      <span class="hint">Starts deep red at ${shiftTime(W.time,-W.fade)}, warms to daylight white by ${W.time}. The clock flashes gently at the end.</span>
+    </div>
+    <div class="card">
+      <div class="row"><span class="label">Warm light at night</span>${sw(N.on,'non','Warm light at night')}</div>
+      <div class="row"><span>Starting at</span><input type="time" id="ntime" value="${N.from}" aria-label="Night start"></div>
+      <div class="row"><span>Shift lamps to</span><div class="seg" role="group" aria-label="Color temperature">${[2200,2700,3000].map(k=>`<button data-k="${k}" aria-pressed="${N.k===k}">${k} K</button>`).join('')}</div></div>
+      <span class="hint">Only changes lamps that are on and showing white. Colors you picked stay.</span>
+    </div>
+    <div class="card">
+      <span class="label">Sleep timer</span>
+      <div class="chips">${[15,30,45,60].map(m=>`<button class="chip" data-sleep="${m}">${m} min</button>`).join('')}<button class="chip" data-sleep="0">Cancel</button></div>
+      <div class="row"><span>${left?'Everything fades off in':'Not running'}</span><b class="num" id="sleepleft">${left?fmtLeft(left):''}</b></div>
+      <span class="hint">The clock shows the countdown while it runs.</span>
+    </div>
+    <div class="card">
+      <div class="row"><span class="label">Clock night dim</span>${sw(D.on,'don','Clock night dim')}</div>
+      <div class="row"><span>From</span><input type="time" id="dfrom" value="${D.from}" aria-label="Dim from"></div>
+      <div class="row"><span>Until</span><input type="time" id="dto" value="${D.to}" aria-label="Dim until"></div>
+      <div class="row"><span>Clock brightness</span><b class="num">${D.lvl}%</b></div>
+      <input type="range" id="dlvl" min="1" max="40" value="${D.lvl}" aria-label="Night clock brightness">
+    </div>
+  </div>`;
+}
+function shiftTime(t,m){ let [h,mm]=t.split(':').map(Number); let x=(h*60+mm+m+1440)%1440; return String(Math.floor(x/60)).padStart(2,'0')+':'+String(x%60).padStart(2,'0'); }
+function fmtLeft(ms){ const s=Math.ceil(ms/1000); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+
+/* ===================== SETTINGS ===================== */
+const SKINS=[['mixer','Mixer','linear-gradient(90deg,#121418 0 20%,#ffb547 20% 22%,#121418 22% 40%,#7c46ff 40% 42%,#121418 42% 60%,#ff9646 60% 62%,#121418 62%)'],
+             ['map','Room map','repeating-linear-gradient(0deg,rgba(124,211,255,.25) 0 1px,transparent 1px 12px),repeating-linear-gradient(90deg,rgba(124,211,255,.25) 0 1px,#0c1721 1px 12px)'],
+             ['neon','Neon','linear-gradient(180deg,#0a0517 50%,#3c2273)']];
+const roomOpts = sel => S.rooms.map(r=>`<option value="${r.id}" ${sel===r.id?'selected':''}>${r.name}</option>`).join('');
+function viewSettings(){
+  return `
+  <div class="sec-h"><h2>Settings</h2></div>
+  <div class="card">
+    <span class="label">Theme</span>
+    <div class="skins">${SKINS.map(([k,n,pv])=>`<button class="skinc" data-setskin="${k}" aria-pressed="${S.skin===k}"><div class="pv" style="background:${pv}"></div><div class="t">${n}</div></button>`).join('')}</div>
+  </div>
+  <div class="card">
+    <div class="row"><span class="label">Rooms</span><span class="hint">Each room has its own map. Scenes and modes can target one room.</span></div>
+    ${S.rooms.map(r=>`<div class="row"><input type="text" value="${r.name.replace(/"/g,'&quot;')}" data-rname="${r.id}" aria-label="Room name" style="flex:1;min-width:140px"><span class="hint num">${roomLights(r.id).length} lights</span><button class="btn small" data-delroom="${r.id}" ${roomLights(r.id).length||S.rooms.length<2?'disabled':''} title="Move its lights out first">Delete</button></div>`).join('')}
+    <div class="row" style="flex-wrap:nowrap"><input type="text" id="newroom" placeholder="New room, e.g. Living room" maxlength="24"><button class="btn primary" id="addroom">Add room</button></div>
+  </div>
+  <div class="card">
+    <div class="row"><span class="label">Lights</span><span class="hint">Lights are found by MAC. If one stops answering after an outage, type its new IP and tap Test. Within a room, the first 4 are on the panel's faders.</span></div>
+    ${S.rooms.map(r=>{ const ls=roomLights(r.id); return `<div class="label" style="margin-top:6px">${r.name}</div>${ls.length?`<div class="devlist" data-room-list="${r.id}">${ls.map((l,i)=>`
+      <div class="dev" data-sort data-key="${l.id}">
+        <button class="handle" aria-label="Drag to reorder ${l.name}" title="Drag to reorder">⠿</button>
+        <div class="main" style="min-width:0"><b>${l.name}</b> ${i<4?`<span class="fbadge on">FADER ${i+1}</span>`:`<span class="fbadge">no fader</span>`}<div class="hint num">${TYPES[l.type].label} · ${l.mac}${lightStatus(l)}</div>
+          ${isSegmented(l)?`<div class="row" style="justify-content:flex-start;gap:8px;margin-top:8px">
+            <label class="hint" for="seg-${l.id}">Segments in use</label>
+            <input type="number" id="seg-${l.id}" data-segused="${l.id}" min="1" max="${segMax(l)}" value="${segsOf(l)}" style="width:70px">
+            <span class="hint num">of ${segMax(l)}</span>
+            <button class="btn small" data-count="${l.id}">Count my segments</button></div>`:''}
+          ${l.type==='bulb'?`<div class="row" style="justify-content:flex-start;gap:8px;margin-top:8px">
+            <label class="hint" for="wh-${l.id}">White LEDs</label>
+            <select id="wh-${l.id}" data-white="${l.id}">${[['low','Low: keeps colors'],['rgb','None: RGB only'],['lamp','WiZ default']].map(([v,n])=>`<option value="${v}" ${(l.white||'low')===v?'selected':''}>${n}</option>`).join('')}</select></div>`:''}</div>
+        <input type="text" class="mono" value="${l.ip}" data-ip="${l.id}" aria-label="${l.name} IP address" inputmode="decimal">
+        <select data-lroom="${l.id}" aria-label="${l.name} room">${roomOpts(l.room)}</select>
+        <div class="acts"><button class="btn small" data-test="${l.id}">Test</button><button class="btn small danger" data-rmlight="${l.id}">Remove</button></div>
+      </div>`).join('')}</div>`:`<span class="hint">No lights yet.</span>`}`; }).join('')}
+  </div>
+  <div class="card">
+    <span class="label">Add a light</span>
+    <div class="addform">
+      <input type="text" id="nl-name" placeholder="Name, e.g. Shelf strip" maxlength="24" aria-label="Light name">
+      <select id="nl-type" aria-label="Light type"><option value="detect">WiZ: detect type</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select>
+      <select id="nl-room" aria-label="Room">${roomOpts(S.room==='all'?(S.rooms[0]||{}).id:S.room)}</select>
+      <input type="text" class="mono" id="nl-mac" placeholder="MAC, e.g. CC:40:85:12:34:56" aria-label="MAC address">
+      <input type="text" class="mono" id="nl-ip" placeholder="IP, e.g. 10.73.24.120" inputmode="decimal" aria-label="IP address">
+      <button class="btn primary" id="nl-add">Add light</button>
+    </div>
+    <span class="hint">For WiZ lights, the hub asks the light what it is (bulb, or RGBIC strip and its segment count). Demo: detection picks a bulb.</span>
+  </div>
+  <div class="card">
+    <div class="row"><span class="label">Password and devices</span><span class="hint">Every phone or laptop needs the password once.</span></div>
+    ${HUB.live ? `<div id="devlist" style="display:flex;flex-direction:column;gap:8px"><span class="hint">Loading devices…</span></div>` :
+      S.devices.map((dv,i)=>`<div class="row"><span><b>${dv.n}</b> <span class="hint">${dv.me?'This device · now':'Last used '+dv.w}</span></span>${dv.me?`<button class="btn small" id="psignout">Sign out</button>`:`<button class="btn small danger" data-revoke="${i}">Remove</button>`}</div>`).join('')}
+    <span class="hint">Removing a device signs it out; it needs the password again to get back in.</span>
+    <details><summary class="label" style="cursor:pointer">Change password</summary>
+      <form id="pchgform" style="display:flex;flex-direction:column;gap:8px;margin-top:10px" novalidate>
+        <input type="password" id="pcur" placeholder="Current password" autocomplete="current-password" aria-label="Current password">
+        <input type="password" id="pnew" placeholder="New password (8+ characters)" autocomplete="new-password" aria-label="New password">
+        <input type="password" id="pnew2" placeholder="Type it again" autocomplete="new-password" aria-label="New password again">
+        <label class="row" style="justify-content:flex-start;gap:8px"><input type="checkbox" id="pkick" checked> Sign out all other devices</label>
+        <button class="btn primary" type="submit">Change password</button>
+      </form>
+    </details>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <span class="label">Hub (panel ESP32)</span>
+      ${HUB.live ? `<dl class="kv"><dt>MAC</dt><dd class="num">${HUB.status.mac}</dd><dt>IP</dt><dd class="num">${HUB.status.ip}</dd><dt>Firmware</dt><dd class="num">${HUB.status.version}</dd></dl>
+      ${HUB.remote ? '<span class="hint">Firmware updates and diagnostics are on the hub\'s own page, at home.</span>' :
+      `<div class="chips"><a class="btn small" href="/update" target="_blank" rel="noopener">Update firmware</a><a class="btn small" href="/diag" target="_blank" rel="noopener">Diagnostics</a></div>`}`
+      : `<dl class="kv"><dt>MAC</dt><dd class="num">8C:94:DF:B4:CB:2C</dd><dt>IP</dt><dd class="num">10.73.24.117</dd><dt>Wi-Fi</dt><dd>MiamiOH-MyDevices</dd><dt>Firmware</dt><dd class="num">hub (demo)</dd></dl>
+      <div class="chips"><button class="btn small" id="fakeupd">Update firmware</button><button class="btn small" id="fakediag">Diagnostics</button></div>`}
+    </div>
+    <div class="card">
+      <span class="label">Away from home</span>
+      ${!HUB.live ? `<dl class="kv"><dt>Relay</dt><dd>EMQX (not set up)</dd><dt>Online app</dt><dd>GitHub Pages (not set up)</dd><dt>Google Home</dt><dd>Clock via Sinric Pro</dd></dl>
+      <span class="hint">Once both are set up, the same app works from anywhere, and phone-mic music sync works too.</span>`
+      : HUB.remote ? `<span class="hint">You're connected through the relay, end-to-end encrypted with your app password. The relay login and setup links can only be changed at home.</span>`
+      : `<div class="row"><span class="hint" id="rm-stat">Loading…</span>${sw(false,'rm-on','Remote access')}</div>
+      <input type="text" class="mono" id="rm-host" placeholder="Relay address, e.g. p6e05378.ala.us-east-1.emqxsl.com" aria-label="Relay address">
+      <input type="text" class="mono" id="rm-user" placeholder="Relay username" aria-label="Relay username" autocomplete="off">
+      <input type="password" id="rm-pass" placeholder="Relay password (leave empty to keep the saved one)" aria-label="Relay password" autocomplete="new-password">
+      <button class="btn primary" id="rm-save">Save</button>
+      <span class="hint">The relay login stays on the hub. Everything sent through it is encrypted with your app password.</span>
+      <input type="text" id="rm-url" placeholder="Online app address, e.g. https://you.github.io/lightdeck/" value="${(S.onlineUrl||'').replace(/"/g,'&quot;')}" aria-label="Online app address">
+      <button class="btn" id="rm-link">Set up a device</button>
+      <div id="rm-linkbox" hidden style="display:flex;flex-direction:column;gap:8px">
+        <span class="hint">Open this link on the phone or laptop you want to use away from home, then sign in with your app password. It has the relay login, not your app password, and it only needs opening once.</span>
+        <input type="text" class="mono" id="rm-linktext" readonly aria-label="Setup link">
+        <div class="chips"><button class="btn small" id="rm-copy">Copy link</button><a class="btn small" id="rm-open" target="_blank" rel="noopener">Open here</a></div>
+      </div>`}
+    </div>
+  </div>`;
+}
+
+/* ===================== actions ===================== */
+function setLight(id, patch){ Object.assign(byId(id), patch); changed(); }
+// A scene: L[lightId] = [on, brightness, rgb, modeId or 0]. Each light either holds its fixed
+// color or runs its own dynamic mode. Lights not in L are left alone (they keep any mode they're running).
+const sceneLightMode = (p,v) => { const mid = typeof v[3]==='string' ? v[3] : (v[3] && p.mode) ? p.mode : null; return mid && modeById(mid) ? mid : null; };
+function applySceneData(p){
+  S.fx=null;
+  LIGHTS.forEach(l=>{ const v=p.L[l.id]; if(!v) return; Object.assign(l,{on:!!v[0],bri:v[1],c:v[2].slice()});
+    const mid=sceneLightMode(p,v); if (mid) { S.lightModes[l.id]=mid; S.lastMode=mid; } else delete S.lightModes[l.id]; });
+  const rm=runningMode(); if (rm) { S.colorA=hex2rgb(rm.pal[0]); S.colorB=hex2rgb(rm.pal[1]||rm.pal[0]); }
+}
+function applyScene(i){
+  const p=S.presets[i]; applySceneData(p);
+  S.activeScene=i; save(); render(); toast(`${p.name} on`);
+}
+function captureScene(name){
+  const L={}; roomLights(S.room).forEach(l=>L[l.id]=[l.on?1:0,l.bri,l.c.slice(),S.lightModes[l.id]&&modeById(S.lightModes[l.id])?S.lightModes[l.id]:0]);
+  return {name, L};
+}
+const validIp = s => /^\d{1,3}(\.\d{1,3}){3}$/.test(s.trim());
+const validMac = s => /^([0-9a-f]{2}[:-]?){5}[0-9a-f]{2}$/i.test(s.trim());
+
+/* ---------- drag to reorder ----------
+   Mouse: press and move. Touch: hold ~0.3 s, then drag (a quick swipe still scrolls).
+   With a handle selector, dragging starts immediately from the handle. */
+let dragActive=false, suppressClick=false;
+document.addEventListener('touchmove', e => { if (dragActive) e.preventDefault(); }, {passive:false});
+document.addEventListener('contextmenu', e => { if (dragActive || e.target.closest('[data-sort]')) e.preventDefault(); });
+function sortable(container, onDrop, handleSel){
+  if (!container) return;
+  container.addEventListener('pointerdown', e => {
+    const item = e.target.closest('[data-sort]'); if (!item || item.parentElement!==container) return;
+    const onHandle = handleSel && e.target.closest(handleSel);
+    if (handleSel && !onHandle) return;
+    if (e.target.closest('input,select,.smore,.smenu,.fader,.knob')) return;
+    const touch = e.pointerType!=='mouse', sx=e.clientX, sy=e.clientY;
+    let started=false, timer=null, ghost=null, offX=0, offY=0;
+    const start = () => {
+      started=true; dragActive=true;
+      const r=item.getBoundingClientRect(); offX=sx-r.left; offY=sy-r.top;
+      ghost=item.cloneNode(true); ghost.classList.add('drag-ghost');
+      Object.assign(ghost.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});
+      document.body.appendChild(ghost); item.classList.add('drag-src');
+      try { navigator.vibrate && navigator.vibrate(12); } catch(_) {}
+    };
+    if (touch && !onHandle) timer=setTimeout(start, 300);
+    const move = ev => {
+      if (!started) {
+        if (Math.hypot(ev.clientX-sx, ev.clientY-sy) > 8) { if (touch && !onHandle) { end(); return; } start(); } else return;
+      }
+      ghost.style.left=(ev.clientX-offX)+'px'; ghost.style.top=(ev.clientY-offY)+'px';
+      const under=document.elementFromPoint(ev.clientX, ev.clientY), over=under && under.closest('[data-sort]');
+      if (over && over!==item && over.parentElement===container) {
+        const items=[...container.querySelectorAll(':scope > [data-sort]')], a=items.indexOf(item), b=items.indexOf(over);
+        container.insertBefore(item, a<b ? over.nextSibling : over);
+      }
+      const sc=container.closest('.stripscroll'); if (sc) { const r=sc.getBoundingClientRect(); if (ev.clientX>r.right-30) sc.scrollLeft+=8; if (ev.clientX<r.left+30) sc.scrollLeft-=8; }
+    };
+    const end = (drop) => {
+      clearTimeout(timer); window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); window.removeEventListener('pointercancel',cancel);
+      if (started) {
+        ghost.remove(); item.classList.remove('drag-src'); dragActive=false;
+        suppressClick=true; setTimeout(()=>suppressClick=false, 60);
+        if (drop) onDrop([...container.querySelectorAll(':scope > [data-sort]')].map(x=>x.dataset.key));
+        else render();
+      }
+    };
+    const up = () => end(true), cancel = () => end(false);
+    window.addEventListener('pointermove',move); window.addEventListener('pointerup',up); window.addEventListener('pointercancel',cancel);
+  });
+}
+// put the given light ids, in this order, into the slots those lights already occupy in LIGHTS
+function reorderLights(ids){
+  const slots = ids.map(id=>LIGHTS.findIndex(l=>l.id===id)).sort((a,b)=>a-b), picked = ids.map(byId);
+  slots.forEach((s,j)=>LIGHTS[s]=picked[j]); save(); render();
+}
+
+document.addEventListener('click', e => {
+  if (suppressClick) { e.preventDefault(); e.stopPropagation(); suppressClick=false; return; }
+  if (e.target.closest('#editorRoot,#sheetRoot')) return;
+  const t=e.target.closest('button,[data-lamp]'); if(!t) return;
+  const d=t.dataset;
+  if (d.toggle) { const l=byId(d.toggle); setLight(l.id,{on:!l.on}); }
+  else if (d.color) openColor(d.color);
+  else if (d.room) { S.room=d.room; S.picked=null; render(); save(); }
+  else if (d.gotab) { S.tab=d.gotab; render(); }
+  else if (d.scene!==undefined) applyScene(+d.scene);
+  else if (d.pick) { S.sel=d.pick; render(); save(); }
+  else if (d.setskin) setSkin(d.setskin);
+  else if (d.arm) { S.armed = S.armed.includes(d.arm)? S.armed.filter(x=>x!==d.arm) : [...S.armed,d.arm]; save(); render(); }   // re-render: knob B's job depends on the clock's SEL
+  else if (d.fx!==undefined) { S.fx = d.fx==='null'?null:d.fx; S.lightModes={}; render(); save(); toast(S.fx?FX.find(f=>f.id===S.fx).name+' running':'Stopped'); }
+  else if (d.runmode) { if (activeModeIds().includes(d.runmode)) { stopMode(d.runmode); toast('Mode stopped'); } else { runMode(d.runmode); toast(`${modeById(d.runmode).name} running`); } render(); save(); }
+  else if (d.editmode) openEditor(modeById(d.editmode));
+  else if (t.id==='newmode') openEditor(null);
+  else if (d.tgt) { S.fxTargets = S.fxTargets.includes(d.tgt)? S.fxTargets.filter(x=>x!==d.tgt):[...S.fxTargets,d.tgt]; t.setAttribute('aria-pressed',S.fxTargets.includes(d.tgt)); save(); }
+  else if (d.src) { S.musicSrc=d.src; render(); save(); }
+  else if (d.wiz) { const l=byId(d.wizl); delete S.lightModes[l.id]; S.fxTargets=S.fxTargets.filter(x=>x!==l.id);
+    if (HUB.live) {          // start the lamp's real built-in scene
+      l.on=true; l.wizScene=+d.wiz; HUB.touched[l.id]=Date.now();
+      hubApi('/api/set',{id:l.id, scene:+d.wiz}).then(()=>{ HUB.lastSent[l.id]=desiredOf(l); }).catch(()=>toast('Couldn\'t reach the hub'));
+      save(); render();
+    } else setLight(l.id,{on:true,c:WIZ_COLOR[d.wiz].slice()});
+    toast(`${l.name}: ${WIZ.find(w=>w[1]==d.wiz)[0]}`); }
+  else if (d.cfx) { S.clock.fx=d.cfx; render(); save(); }
+  else if (d.trans) { S.clock.trans=d.trans; render(); save(); }
+  else if (d.dc!==undefined) openDigit(d.dc);
+  else if (d.day!==undefined) { const i=+d.day, a=S.sched.wake.days; S.sched.wake.days=a.includes(i)?a.filter(x=>x!==i):[...a,i]; render(); save(); }
+  else if (d.fade) { S.sched.wake.fade=+d.fade; render(); save(); }
+  else if (d.k) { S.sched.night.k=+d.k; render(); save(); }
+  else if (d.sleep!==undefined) { S.sched.sleepEnd = +d.sleep ? Date.now()+d.sleep*60000 : 0; render(); save(); toast(+d.sleep?`Sleep timer: ${d.sleep} min`:'Sleep timer canceled'); }
+  else if (d.test) {
+    const l=byId(d.test);
+    if (!HUB.live) toast(`${l.name} answered in ${12+Math.round(Math.random()*30)} ms`);
+    else { const t0=Date.now(); toast(`Checking ${l.name}…`);
+      hubApi('/api/detect',{ip:l.ip}).then(r=>{
+        if (!r.found) toast(`${l.name}: nothing answered at ${l.ip}`);
+        else if (r.mac && r.mac.toLowerCase()!==l.mac.replace(/[:-]/g,'').toLowerCase()) toast(`A different device answered at ${l.ip} (MAC ${r.mac}). Update ${l.name}'s IP.`);
+        else toast(`${l.name} answered in ${Date.now()-t0} ms`);
+      }).catch(()=>toast('Couldn\'t reach the hub')); }
+  }
+  else if (d.mcol!==undefined) {
+    if (e.target.dataset.mrem!==undefined) { S.musicPal.splice(+e.target.dataset.mrem,1); save(); render(); return; }
+    const i=+d.mcol; sheet(`Music color ${i+1}`, hex2rgb(S.musicPal[i]), c=>{ S.musicPal[i]=rgb2hex(c); t.style.background='#'+S.musicPal[i]; });
+  }
+  else if (t.id==='madd') { const last=hex2rgb(S.musicPal[S.musicPal.length-1]); S.musicPal.push(rgb2hex(hsv((toHS(last)[0]+70)%360))); save(); render(); }
+  else if (t.id==='mknobs') { S.musicPal=[rgb2hex(S.colorA), rgb2hex(S.colorB)]; save(); render(); toast('Music sync uses your knob colors'); }
+  else if (d.sedit!==undefined) { S.sceneMenu=null; openSceneEditor(+d.sedit); }
+  else if (t.id==='scnew') openSceneEditor(null);
+  else if (d.smore!==undefined) { S.sceneMenu = S.sceneMenu===+d.smore ? null : +d.smore; render(); }
+  else if (d.delscene!==undefined) {
+    if (!t.dataset.armed) { t.dataset.armed='1'; t.textContent='Tap again to delete'; return; }
+    const n=S.presets[+d.delscene].name; S.presets.splice(+d.delscene,1); S.activeScene=null; S.sceneMenu=null; render(); save(); toast(`Deleted ${n}`); }
+  else if (d.over!==undefined) { const i=+d.over; S.presets[i]=captureScene(S.presets[i].name); render(); save(); toast(`${S.presets[i].name} updated to what's on now`); }
+  else if (d.up!==undefined) { const i=+d.up; [S.presets[i-1],S.presets[i]]=[S.presets[i],S.presets[i-1]]; render(); save(); }
+  else if (d.add) { const R=layoutOf(mapRoom()), [w,h]=FURN_SIZES[d.add]; R.items.push({k:d.add,x:Math.max(0,R.w/2-w/2),y:Math.max(0,R.h/2-h/2),w,h,r:0}); S.picked='f'+(R.items.length-1); render(); }
+  else if (d.rs) { const R=layoutOf(mapRoom()), [k,v]=d.rs.split(','); R[k]=Math.max(6,Math.min(40,R[k]+ +v)); render(); }
+  else if (d.lamp && !S.editing) { S.sel=d.lamp; render(); save(); }
+  else if (d.delroom) { S.rooms=S.rooms.filter(r=>r.id!==d.delroom); delete S.layouts[d.delroom]; render(); save(); }
+  else if (d.lup) { const l=byId(d.lup), ls=roomLights(l.room), i=ls.indexOf(l), other=ls[i-1]; const a=LIGHTS.indexOf(l), b=LIGHTS.indexOf(other); [LIGHTS[a],LIGHTS[b]]=[LIGHTS[b],LIGHTS[a]]; render(); save(); }
+  else if (d.rmlight) {
+    if (t.dataset.armed) { const n=byId(d.rmlight).name; LIGHTS=LIGHTS.filter(l=>l.id!==d.rmlight); delete S.lampPos[d.rmlight]; S.armed=S.armed.filter(x=>x!==d.rmlight); render(); save(); toast(`Removed ${n}`); }
+    else { t.dataset.armed='1'; t.textContent='Tap again'; }
+  }
+  else if (t.classList.contains('switch') && !d.toggle) toggleSwitch(t.id);
+});
+function toggleSwitch(id){
+  const C=S.clock, Sc=S.sched;
+  const map={clink:()=>C.link=!C.link, ch24:()=>C.h24=!C.h24, clead:()=>C.lead=!C.lead, cblink:()=>C.blink=!C.blink, calarm:()=>C.alarmFx=!C.alarmFx,
+             won:()=>Sc.wake.on=!Sc.wake.on, non:()=>Sc.night.on=!Sc.night.on, don:()=>Sc.dim.on=!Sc.dim.on};
+  if(map[id]){ map[id](); render(); save(); }
+}
+
+const wire = {
+  lights(){
+    $$('[data-fader]').forEach(el => { const id=el.dataset.fader; fader(el, ()=>byId(id).bri, v=>setLight(id,{bri:v,on:true})); });
+    const mf=$('#masterf'); if(mf) fader(mf, ()=>S.master, v=>{ S.master=v; changed(); });
+    const ab=$('#allbtn'); if(ab) ab.onclick=()=>{ const ls=roomLights(S.room), any=ls.some(l=>l.on); ls.forEach(l=>l.on=!any); ab.setAttribute('aria-pressed',!any); changed(); };
+    [['A','#knobA','#ccA'],['B','#knobB','#ccB']].forEach(([w,ks,cs])=>{ const k=$(ks); if(!k) return;
+      knob(k, ()=>toHS(w==='A'?S.colorA:S.colorB)[0], h=>{ const c=hsv(h); setKnob(w,c); k.querySelector('.ptr').style.transform=`rotate(${h}deg)`; $(cs).style.background=css(c); }); });
+    $$('input[data-bri]').forEach(i => i.oninput = () => setLight(i.dataset.bri,{bri:+i.value,on:true}));
+    sortable($('#stripgrid'), keys => reorderLights(keys.filter(byId)), '.handle');
+    if (S.skin==='map') wireMap();
+  },
+  scenes(){
+    sortable($('#scenegrid'), keys => { const old=S.presets.slice(), act=S.activeScene; S.presets=keys.map(k=>old[+k]);
+      S.activeScene = act==null ? null : keys.indexOf(String(act)); S.sceneMenu=null; save(); render(); });
+    $$('[data-srename]').forEach(i=>i.onchange=()=>{ const v=i.value.trim(); if(v){ S.presets[+i.dataset.srename].name=v; save(); } });
+    $('#scsave').onclick=()=>{ const n=$('#scname').value.trim()||`Scene ${S.presets.length+1}`; S.presets.push(captureScene(n)); S.activeScene=S.presets.length-1; render(); save(); toast(`Saved ${n}`); }; },
+  modes(){
+    sortable($('#modegrid'), keys => { S.modes = keys.map(modeById); save(); render(); });
+    const sp=$('#speed'), lab=()=>$('#spl').textContent=S.speed<35?'Slow':S.speed<90?'Medium':'Fast'; lab();
+    sp.oninput=()=>{ S.speed=+sp.value; lab(); save(); };
+    $('#sens').oninput=e=>{ S.sens=+e.target.value; e.target.previousElementSibling.lastElementChild.textContent=S.sens+'%'; save(); };
+    $('#bpm').oninput=e=>{ S.bpm=+e.target.value; $('#bpmv').textContent=S.bpm+' BPM'; save(); };
+  },
+  clock(){
+    $('#dcall').onclick=()=>{ const h=rgb2hex(byId('clock').c); S.clock.dc=[h,h,h,h]; S.clock.pd=false; render(); save(); };
+    $('#dcsplit').onclick=()=>{ S.clock.dc=['ff3c00','ff3c00','00c8ff','00c8ff']; S.clock.pd=true; render(); save(); };
+    $$('[data-c2m]').forEach(b=>b.onclick=()=>{ S.clock.c2auto = b.dataset.c2m==='1'; render(); save(); });
+    const sh=$('#cshade'); if (sh) sh.oninput=()=>{ S.clock.shade=+sh.value; $('#cshv').textContent=S.clock.shade; save(); };
+    const cp=$('#c2pick'); if (cp) cp.onclick=()=>sheet('Clock second color', hex2rgb(S.clock.c2||'0040ff'), c=>{ S.clock.c2=rgb2hex(c); S.clock.c2auto=false; cp.style.background='#'+S.clock.c2; });
+    $('#cspeed').oninput=e=>{ S.clock.speed=+e.target.value; $('#cspl').textContent=S.clock.speed+' / 255'; save(); };
+  },
+  sched(){
+    const bind=(id,fn)=>{ const e=$(id); if(e) e.onchange=()=>{ fn(e.value); render(); save(); }; };
+    bind('#wtime',v=>S.sched.wake.time=v); bind('#ntime',v=>S.sched.night.from=v); bind('#dfrom',v=>S.sched.dim.from=v); bind('#dto',v=>S.sched.dim.to=v);
+    $('#dlvl').oninput=e=>{ S.sched.dim.lvl=+e.target.value; e.target.previousElementSibling.lastElementChild.textContent=S.sched.dim.lvl+'%'; save(); };
+  },
+  settings(){
+    $$('[data-room-list]').forEach(list => sortable(list, reorderLights, '.handle'));
+    $$('[data-ip]').forEach(i=>i.onchange=()=>{ const l=byId(i.dataset.ip); if(!validIp(i.value)){ toast('Use four numbers like 10.73.24.94'); i.value=l.ip; return; } l.ip=i.value.trim(); save(); toast(`${l.name} saved at ${l.ip}`); });
+    $$('[data-lroom]').forEach(s=>s.onchange=()=>{ const l=byId(s.dataset.lroom); l.room=s.value; save(); render(); toast(`${l.name} moved to ${roomName(l.room)}`); });
+    $$('[data-rname]').forEach(i=>i.onchange=()=>{ const r=S.rooms.find(x=>x.id===i.dataset.rname); if(i.value.trim()){ r.name=i.value.trim(); save(); render(); } });
+    $('#addroom').onclick=()=>{ const n=$('#newroom').value.trim(); if(!n){ toast('Type a room name first'); return; } const id='r'+Date.now(); S.rooms.push({id,name:n}); layoutOf(id); save(); render(); toast(`Added ${n}`); };
+    $('#nl-add').onclick=async()=>{
+      const name=$('#nl-name').value.trim(), mac=$('#nl-mac').value.trim(), ip=$('#nl-ip').value.trim(); let type=$('#nl-type').value, segs=0;
+      if(!name){ toast('Give the light a name'); return; } if(!validMac(mac)){ toast('MAC should look like CC:40:85:12:34:56'); return; } if(!validIp(ip)){ toast('IP should look like 10.73.24.120'); return; }
+      if (HUB.live && (type==='detect' || TYPES[type].wiz)) {
+        toast('Asking the light what it is…');
+        try { const r=await hubApi('/api/detect',{ip});
+          if (!r.found) { toast('Nothing answered at '+ip+'. Check the IP, and that the light is powered.'); return; }
+          if (r.mac && r.mac.toLowerCase()!==mac.replace(/[:-]/g,'').toLowerCase()) { toast('The light at '+ip+' has MAC '+r.mac+', not the one you typed. Check both.'); return; }
+          if (type==='detect') type = r.type in TYPES ? r.type : 'bulb';
+          segs = r.segments||0;
+        } catch(e) { toast('Couldn\'t reach the hub'); return; }
+      }
+      if(type==='detect') type='bulb';
+      const nl={id:'l'+Date.now(), name, room:$('#nl-room').value, type, ip, mac:mac.toUpperCase(), on:true, bri:60, c:[255,170,90]};
+      if (segs) nl.segUsed=segs;
+      LIGHTS.push(nl);
+      S.fxTargets.push(nl.id); save(); render(); toast(`Added ${name} (${TYPES[type].label}${segs?', '+segs+' segments':''})`);
+    };
+    $$('[data-segused]').forEach(i=>i.onchange=()=>{ const l=byId(i.dataset.segused), v=Math.round(+i.value);
+      if (!(v>=1 && v<=segMax(l))) { toast(`Use a number from 1 to ${segMax(l)}`); i.value=segsOf(l); return; }
+      l.segUsed=v; save(); render(); toast(`${l.name}: effects now fill ${v} segments`); });
+    $$('[data-count]').forEach(b=>b.onclick=()=>openCounter(b.dataset.count));
+    $$('[data-white]').forEach(s=>s.onchange=()=>{ const l=byId(s.dataset.white); l.white=s.value; save();
+      if (HUB.live) setTimeout(()=>{ HUB.lastSent[l.id]={}; }, 1500);   // after the hub has the new setting, resend its color
+      toast(`${l.name}: white LEDs ${s.options[s.selectedIndex].text.split(':')[0].toLowerCase()}`); });
+    if (HUB.live && !HUB.remote) wireRemoteCard();
+    if (HUB.live) {
+      hubRefreshDevices();
+      $('#pchgform').onsubmit=async e=>{ e.preventDefault();
+        const n=$('#pnew').value; if (n.length<8) { toast('Use at least 8 characters'); return; } if (n!==$('#pnew2').value) { toast('New passwords don\'t match'); return; }
+        try { await hubApi('/api/password', {current:$('#pcur').value, new:n, signOutOthers:$('#pkick').checked}); $('#pchgform').reset(); toast('Password changed'); hubRefreshDevices(); }
+        catch(x) { toast(x&&x.error ? x.error[0].toUpperCase()+x.error.slice(1) : 'Couldn\'t reach the hub'); } };
+      return;
+    }
+    $('#psignout').onclick=()=>{ LS.del('ld-session'); showLock(); };
+    $$('[data-revoke]').forEach(b=>b.onclick=()=>{ const dv=S.devices[+b.dataset.revoke]; S.devices.splice(+b.dataset.revoke,1); save(); render(); toast(`${dv.n} signed out`); });
+    $('#pchgform').onsubmit=async e=>{ e.preventDefault();
+      if (await passHash($('#pcur').value)!==LS.get('ld-pass')) { toast('Current password isn\'t right'); return; }
+      const n=$('#pnew').value; if (n.length<8) { toast('Use at least 8 characters'); return; } if (n!==$('#pnew2').value) { toast('New passwords don\'t match'); return; }
+      LS.set('ld-pass', await passHash(n)); if ($('#pkick').checked) S.devices=S.devices.filter(d=>d.me); save(); render(); toast('Password changed'); };
+    $('#fakeupd').onclick=()=>toast('On the real hub this opens /update');
+    $('#fakediag').onclick=()=>toast('On the real hub this opens /diag');
+  },
+};
+
+/* ---------- room map dragging ---------- */
+function wireMap(){
+  const svg=$('#room'); if(!svg) return;
+  if(!S.editing){ const se=$('#startedit'); if(se) se.onclick=()=>{ S.editing=true; S.picked=null; render(); }; return; }
+  const R=layoutOf(mapRoom());
+  const pt = e => { const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+  const posOf = key => key.startsWith('l:') ? S.lampPos[key.slice(2)] : R.items[+key.slice(1)];
+  let drag=null;
+  svg.onpointerdown = e => {
+    const g=e.target.closest('.item'); if(!g){ S.picked=null; render(); return; }
+    const key=g.dataset.pickItem, it=posOf(key), p=pt(e);
+    S.picked=key; drag={it, dx:p.x/SC-it.x, dy:p.y/SC-it.y, bx:it.x, by:it.y, g}; svg.setPointerCapture(e.pointerId);
+    svg.querySelectorAll('.item').forEach(x=>x.classList.toggle('picked',x===g));
+  };
+  svg.onpointermove = e => { if(!drag) return; const it=drag.it, p=pt(e);
+    it.x=Math.max(-1,Math.min(R.w,Math.round((p.x/SC-drag.dx)*4)/4)); it.y=Math.max(-1,Math.min(R.h,Math.round((p.y/SC-drag.dy)*4)/4));
+    drag.g.setAttribute('transform',`translate(${(it.x-drag.bx)*SC},${(it.y-drag.by)*SC})`); drag.moved=true; };
+  svg.onpointerup = svg.onpointercancel = () => { if(drag) render(); drag=null; };
+  $('#rot').onclick=()=>{ const it=S.picked&&S.picked.startsWith('f')&&R.items[+S.picked.slice(1)]; if(it){ it.r=(it.r+90)%360; render(); } };
+  $('#del').onclick=()=>{ if(S.picked&&S.picked.startsWith('f')){ R.items.splice(+S.picked.slice(1),1); S.picked=null; render(); } };
+  $('#resetroom').onclick=()=>{ R.items=R.items.filter(i=>i.k==='door'); S.picked=null; render(); toast('Furniture cleared'); };
+  $('#doneedit').onclick=()=>{ S.editing=false; S.picked=null; save(); render(); toast('Layout saved on the hub'); };
+}
+
+/* ===================== color sheet ===================== */
+const SWATCHES=['ff3c00','ffa000','ff1a1a','ff2e88','8a2bff','1e5bff','00c8ff','00e05a','ffb46a','e8eeff'];
+function sheet(title, rgb, onPick, onClose){
+  let [h,s]=toHS(rgb);
+  const root=$('#sheetRoot');
+  root.innerHTML=`<div class="backdrop" id="bd"><div class="sheet" role="dialog" aria-modal="true" aria-label="${title}">
+    <div class="row"><b class="bigname" style="font-size:20px">${title}</b><button class="btn small" id="shclose">Done</button></div>
+    <div class="pv" id="shpv"></div>
+    <label class="label" for="shh">Hue</label><input class="hue" type="range" id="shh" min="0" max="359" value="${Math.round(h)}">
+    <label class="label" for="shs">Strength</label><input type="range" id="shs" min="0" max="100" value="${Math.round(s*100)}">
+    <div class="row"><label class="label" for="shk">Whites</label><span class="hint num" id="shkv">Warm yellow to white</span></div>
+    <input class="hue kel" type="range" id="shk" min="2200" max="6500" step="50" value="2700" aria-label="White temperature, warm yellow to white">
+    <div class="row hint"><span>Warm yellow</span><span>White</span></div>
+    <span class="label">Favorites</span>
+    <div class="swrow">${SWATCHES.map(x=>`<button data-swx="${x}" style="background:#${x}" aria-label="#${x}"></button>`).join('')}</div>
+  </div></div>`;
+  const pv=$('#shpv'), H=$('#shh'), Sx=$('#shs');
+  const upd=c=>{ pv.style.background=css(c); Sx.style.background=`linear-gradient(90deg,#fff,${css(hsv(+H.value))})`; onPick(c.map(Math.round)); };
+  H.oninput=Sx.oninput=()=>upd(hsv(+H.value,+Sx.value/100)); pv.style.background=css(rgb); Sx.style.background=`linear-gradient(90deg,#fff,${css(hsv(h))})`;
+  const K=$('#shk'); K.oninput=()=>{ const c=kelvinSmooth(+K.value), [hh,ss]=toHS(c); H.value=Math.round(hh); Sx.value=Math.round(ss*100); $('#shkv').textContent=K.value+' K'; upd(c); };
+  root.querySelectorAll('[data-swx]').forEach(b=>b.onclick=()=>{ const c=hex2rgb(b.dataset.swx), [hh,ss]=toHS(c); H.value=Math.round(hh); Sx.value=Math.round(ss*100); upd(c); });
+  const close=()=>{ root.innerHTML=''; save(); if(onClose) onClose(); else render(); document.removeEventListener('keydown',esc); };
+  const esc=e=>{ if(e.key==='Escape') close(); };
+  $('#shclose').onclick=close; $('#bd').onclick=e=>{ if(e.target.id==='bd') close(); };
+  document.addEventListener('keydown', esc);
+  H.focus();
+}
+// Light color picker, with this light's own dynamic mode selector on top
+function openColor(id){
+  const l=byId(id);
+  sheet(`${l.name} color`, l.c, c=>{ l.c=c; l.on=true; delete S.lightModes[l.id]; S.activeScene=null; const s=$('#lmode'); if(s) s.value=''; });
+  const cur=S.lightModes[l.id]||'';
+  $('#sheetRoot .sheet .row').insertAdjacentHTML('afterend', `<div class="row"><label class="label" for="lmode">Dynamic mode</label><select id="lmode"><option value="">None: use the color below</option>${S.modes.map(m=>`<option value="${m.id}" ${cur===m.id?'selected':''}>${m.name}</option>`).join('')}</select></div><span class="hint">Picking a color below switches this light back to a fixed color.</span>`);
+  $('#lmode').onchange=e=>{ setLightMode(l.id, e.target.value); l.on=true; save(); toast(e.target.value?`${l.name}: ${modeById(e.target.value).name}`:`${l.name}: fixed color`); };
+}
+function openDigit(d){
+  const C=S.clock, isColon=d==='c', cur=hex2rgb(isColon?C.colon:C.dc[+d]);
+  const label=isColon?'Colon color':(+d<2?'Hours color':'Minutes color');
+  sheet(C.link||isColon?label:`Digit ${+d+1} color`, cur, c=>{ const h=rgb2hex(c);
+    C.pd=true;   // picking a digit or colon color = separate digit colors on the clock
+    if(isColon) C.colon=h; else if(C.link){ (+d<2?[0,1]:[2,3]).forEach(i=>C.dc[i]=h); } else C.dc[+d]=h; });
+}
+
+/* ===================== animation loop ===================== */
+function tick(ms){
+  const t=ms/1000;
+  if (S.fx==='music' || S.clock.fx==='music') {
+    const period=.5, ph=(t%period)/period;
+    if (t-beat.last>=period) { beat.last=t-(t%period); beat.idx++; }
+    beat.env=Math.exp(-ph*5)*(S.sens/100)+.05;
+    const m=$('#meter'); if(m) [...m.children].forEach((b,i)=>{ b.style.height=(Math.max(.04,beat.env*(.4+.6*Math.abs(Math.sin(i*1.3+t*6))))*100)+'%'; });
+  }
+  paint(t);
+  if (S.tab==='modes') paintModeCards(t);
+  if (S.tab==='clock') drawClock(ms);
+  if (S.tab==='sched') { const e=$('#sleepleft'), left=S.sched.sleepEnd-Date.now(); if(e) e.textContent = left>0?fmtLeft(left):''; }
+  requestAnimationFrame(tick);
+}
+/* ===================== count my segments =====================
+   Lights segments 1..n one at a time (alternating red/blue, the rest dark) so you can see where the
+   visible end of the strip is, then saves n as "Segments in use".
+   Real hub: each step sends the strip n width-1 steps via the WiZ elm payload (up to 12 per message;
+   past 12 the hub doubles widths). Demo: only the bar below lights up. */
+function openCounter(id){
+  const l=byId(id), max=segMax(l); let n=1, playing=true, timer=null;
+  const E=$('#editorRoot');
+  E.innerHTML=`<div class="backdrop" id="cbd"><div class="sheet" role="dialog" aria-modal="true" aria-label="Count segments">
+    <div class="row"><b class="bigname" style="font-size:22px">Count segments: ${l.name}</b><button class="btn small" id="ccancel">Cancel</button></div>
+    <span class="hint">Watch your strip. Segments light up one at a time, alternating red and blue, and the rest stay dark. When the newest one is at the visible end of the strip, tap <b>That's the last one</b>.</span>
+    <div style="text-align:center"><div class="label">Segment</div><div class="num" style="font-size:56px;font-weight:600;line-height:1.1" id="cn" aria-live="polite">1</div><div class="hint">of up to ${max}</div></div>
+    <div class="segbar" id="cbar" style="--n:${max};height:22px" aria-hidden="true">${'<i></i>'.repeat(max)}</div>
+    <div class="row" style="justify-content:center"><button class="btn" id="cback" aria-label="Previous segment">◀ Back</button><button class="btn" id="cplay">Pause</button><button class="btn" id="cnext" aria-label="Next segment">Next ▶</button></div>
+    <button class="btn primary" id="cdone">That's the last one</button>
+    <span class="demo" style="align-self:flex-start">demo: only this bar lights up</span>
+    ${HUB.live?'<span class="hint">Your real strip is lighting up along with this bar.</span>':''}
+  </div></div>`;
+  // live: light the real strip the same way (segments 1..n alternating red/blue, the rest dark; max 12 blocks)
+  const sendReal=()=>{ if (!HUB.live) return;
+    const steps=[], first=Math.max(1,n-11);
+    steps.push([255,42,42,first]);
+    for (let k=first;k<n;k++) steps.push(k%2?[30,91,255,1]:[255,42,42,1]);
+    hubApi('/api/segments',{id:l.id, steps, bri:100}).catch(()=>{}); };
+  const draw=()=>{ $('#cn').textContent=n; [...$('#cbar').children].forEach((s,k)=>{ s.style.background = k<n ? (k%2?'#1e5bff':'#ff2a2a') : '#111'; s.style.outline = k===n-1 ? '2px solid #fff' : 'none'; s.style.outlineOffset='-2px'; }); sendReal(); };
+  const close=()=>{ clearInterval(timer); E.innerHTML=''; if (HUB.live) { HUB.touched[l.id]=0; HUB.lastSent[l.id]={}; } };   // live: put the strip back to its color
+  timer=setInterval(()=>{ if(playing && n<max){ n++; draw(); } if(n>=max){ playing=false; $('#cplay').textContent='Play'; } }, 1300);
+  $('#cplay').onclick=()=>{ playing=!playing; if(playing && n>=max) n=1; $('#cplay').textContent=playing?'Pause':'Play'; draw(); };
+  $('#cback').onclick=()=>{ playing=false; $('#cplay').textContent='Play'; n=Math.max(1,n-1); draw(); };
+  $('#cnext').onclick=()=>{ playing=false; $('#cplay').textContent='Play'; n=Math.min(max,n+1); draw(); };
+  $('#cdone').onclick=()=>{ l.segUsed=n; close(); save(); render(); toast(`${l.name}: ${n} segments in use`); };
+  $('#ccancel').onclick=close; $('#cbd').onclick=e=>{ if(e.target.id==='cbd') close(); };
+  draw();
+}
+
+/* ===================== hub connection =====================
+   Served by the Light Deck hub  -> live: sign in, load/save the shared data on the hub, poll the lights'
+                                    real state once a second, and send changes as they happen.
+   Opened anywhere else (the artifact link) -> demo: simulated lights, everything in this browser.
+   The rest of the app doesn't care which: it changes LIGHTS/S, and hubSync() sends whatever differs
+   from what the lights last got. */
+var HUB = { live:false, token:'', status:null, cfg:null, devices:null, online:{}, offline:false,
+              saveT:0, lastSaved:'', lastSent:{}, touched:{}, synced:{}, clkSent:'', sleepSent:0, timers:[] };
+const SHARED_KEYS = ['rooms','layouts','lampPos','presets','modes','clock','sched','musicPal','colorA','colorB','speed','sens',
+                     'fxTargets','master','armed','lightModes','lastMode','fx','bpm','onlineUrl'];
+
+/* ---------- away from home: the online copy talks to the hub through the EMQX relay ----------
+   Every message is AES-256-GCM encrypted with key = SHA-256("lightdeck-remote|" + passwordHash), where
+   passwordHash = SHA-256(hub's salt + your password), the same hash the hub stores. The relay login
+   (from the hub's "Set up a device" link) only lets this device reach the relay; without the password
+   nothing can be read or sent. */
+const RM = { cfg:null, cli:null, cid:'', key:null, salt:null, helloRes:null, pending:new Map() };
+const rhex = n => [...crypto.getRandomValues(new Uint8Array(n))].map(b=>b.toString(16).padStart(2,'0')).join('');
+function b64(u8){ let s=''; for (let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null, u8.subarray(i,i+0x8000)); return btoa(s); }
+function unb64(s){ const bin=atob(s); const u=new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; }
+async function sha256hex(s){ const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+function remoteCfg(){ try { return JSON.parse(LS.get('ld-remote')||'null'); } catch(e) { return null; } }
+async function remoteConnect(){
+  if (RM.cli) return;
+  if (!window.mqtt) { try { await loadScript('https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js'); } catch(e) { await loadScript('https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js'); } }
+  const c = RM.cfg; RM.cid = 'ldapp-'+rhex(6);
+  RM.cli = mqtt.connect(`wss://${c.h}:${c.w||8084}/mqtt`, {username:c.u, password:c.p, clientId:RM.cid, clean:true, reconnectPeriod:3000, connectTimeout:10000});
+  RM.cli.on('connect', ()=>{ RM.cli.subscribe([`ld/${c.id}/hello`, `ld/${c.id}/res/${RM.cid}`], {qos:1}); HUB.offline=false; });
+  RM.cli.on('offline', ()=>{ HUB.offline=true; });
+  RM.cli.on('message', async (topic, payload)=>{
+    const s = new TextDecoder().decode(payload);
+    if (topic.endsWith('/hello')) { try { const j=JSON.parse(s); RM.salt=j.salt; if (RM.helloRes) RM.helloRes(j); } catch(e) {} return; }
+    if (!RM.key) return;
+    try { const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(s).slice(0,12)}, RM.key, unb64(s).slice(12));
+          const r = JSON.parse(new TextDecoder().decode(pt)), done = RM.pending.get(r.id);
+          if (done) { RM.pending.delete(r.id); done(r); } } catch(e) {}
+  });
+}
+function remoteSalt(){
+  if (RM.salt!=null) return Promise.resolve(RM.salt);
+  return new Promise((res,rej)=>{ RM.helloRes=j=>res(j.salt); setTimeout(()=>rej({error:'The hub isn\'t connected to the relay. Check that it\'s powered and remote access is on.'}), 12000); });
+}
+async function remoteKeyFromPassword(pw){
+  const salt = await remoteSalt(); if (!salt) throw {error:'The hub has no password set yet'};
+  const ph = await sha256hex(salt+pw);
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('lightdeck-remote|'+ph)));
+}
+const importAesKey = raw => crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt','decrypt']);
+function remoteRequest(path, method, body){
+  return new Promise(async (res,rej)=>{
+    if (!RM.cli || !RM.key) return rej({error:'Not connected to the relay'});
+    const id = rhex(8);
+    const t = setTimeout(()=>{ RM.pending.delete(id); rej({error:'No answer from the hub', timeout:true}); }, 9000);
+    RM.pending.set(id, r=>{ clearTimeout(t); res(r); });
+    const msg = JSON.stringify({id, c:RM.cid, p:path, m:method, t:Date.now(), b: body===undefined?'':(typeof body==='string'?body:JSON.stringify(body))});
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv}, RM.key, new TextEncoder().encode(msg)));
+    const out = new Uint8Array(12+ct.length); out.set(iv); out.set(ct,12);
+    RM.cli.publish(`ld/${RM.cfg.id}/req`, b64(out), {qos:0});
+  });
+}
+async function showLockRemote(){
+  const L=$('#lock');
+  if (!RM.cfg) {
+    L.innerHTML = `<form novalidate><div class="lk"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+      <h1>Light Deck</h1><span class="hint">This phone or laptop isn't set up for away from home yet. At home, open the hub's app, go to <b>Settings → Away from home</b>, tap <b>Set up a device</b>, and open that link here.</span></form>`;
+    L.hidden=false; return;
+  }
+  L.innerHTML = `<form id="lockform" novalidate>
+    <div class="lk"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+    <h1>Light Deck</h1>
+    <span class="hint">Away from home. Enter your app password to reach your lights through the relay. It's asked once on this device.</span>
+    ${pwField('lp1','Password','current-password')}
+    <div class="err" id="lerr" role="alert"></div>
+    <button class="btn primary" type="submit">Sign in</button>
+    <span class="hint">Your password never leaves this device: it's turned into the key that encrypts every message to the hub.</span>
+  </form>`;
+  L.hidden=false;
+  L.querySelectorAll('[data-peek]').forEach(b=>b.onclick=()=>{ const i=$('#'+b.dataset.peek); i.type=i.type==='password'?'text':'password'; b.textContent=i.type==='password'?'Show':'Hide'; });
+  $('#lp1').focus();
+  $('#lockform').onsubmit = async e => {
+    e.preventDefault(); const err=$('#lerr'); err.textContent='Connecting…';
+    try {
+      await remoteConnect();
+      const raw = await remoteKeyFromPassword($('#lp1').value);
+      RM.key = await importAesKey(raw);
+      HUB.status = await hubApi('/api/status');
+      LS.set('ld-rkey', b64(raw));
+      await hubLoad();
+      L.hidden=true; L.innerHTML=''; boot(); toast('Signed in. Away from home.');
+    } catch(x) { RM.key=null; err.textContent = x&&x.timeout ? 'That password isn\'t right, or the hub is offline.' : (x&&x.error) || 'Couldn\'t connect to the relay.'; }
+  };
+}
+const DEVICE_KEYS = ['skin','tab','room','sel','musicSrc'];
+
+async function hubApi(path, body){
+  const post = body!==undefined;
+  if (HUB.remote) {                       // away from home: the same request, encrypted, through the relay
+    const r = await remoteRequest(path, post?'POST':'GET', body);
+    let j = {}; try { j = JSON.parse(r.b||'{}'); } catch(e) {}
+    if (r.s >= 400) throw j;
+    return j;
+  }
+  const r = await fetch(path, { method: post?'POST':'GET', cache:'no-store',
+    headers: Object.assign({'X-Token':HUB.token}, post?{'Content-Type':'application/json'}:{}),
+    body: post ? (typeof body==='string'?body:JSON.stringify(body)) : undefined });
+  let j = {}; try { j = await r.json(); } catch(e) {}
+  if (r.status===401 && path!=='/api/login' && path!=='/api/setup') { hubSignedOut(); throw j; }
+  if (!r.ok) throw j;
+  return j;
+}
+async function detectHub(){
+  try { const r = await fetch('/api/status', {cache:'no-store'}); if (!r.ok) return false;
+        const j = await r.json(); if (j.name!=='Light Deck hub') return false; HUB.status=j; return true; }
+  catch(e) { return false; }
+}
+function hubSignedOut(){ HUB.token=''; LS.del('ld_token'); if (HUB.remote) { LS.del('ld-rkey'); RM.key=null; } HUB.timers.forEach(clearInterval); HUB.timers=[]; booted=false; showLock(); }
+function lightStatic(l){ const o={id:l.id, name:l.name, room:l.room, type:l.type, ip:l.ip, mac:l.mac}; if (l.segUsed) o.segUsed=l.segUsed; if (l.white) o.white=l.white; return o; }
+function hubConfig(){
+  const app={}; SHARED_KEYS.forEach(k=>{ if (S[k]!==undefined) app[k]=S[k]; });
+  return {v:1, segSlot:(HUB.cfg&&HUB.cfg.segSlot)||258, rooms:S.rooms, lights:LIGHTS.map(lightStatic), app};
+}
+function hubSaveDevice(){ const d={}; DEVICE_KEYS.forEach(k=>d[k]=S[k]); LS.set('ld-device', JSON.stringify(d)); }
+function hubScheduleSave(){
+  clearTimeout(HUB.saveT);
+  HUB.saveT = setTimeout(()=>{
+    const body = JSON.stringify(hubConfig());
+    if (body===HUB.lastSaved) return;                       // nothing shared changed (e.g. a fader drag)
+    hubApi('/api/config', body).then(()=>{ HUB.lastSaved=body; })
+      .catch(e=>toast('Couldn\'t save to the hub: '+((e&&e.error)||'no connection')));
+  }, 700);
+}
+async function hubLoad(){
+  const cfg = await hubApi('/api/config'); HUB.cfg = cfg;
+  if (cfg.app) SHARED_KEYS.forEach(k=>{ if (cfg.app[k]!==undefined) S[k]=cfg.app[k]; });
+  if (Array.isArray(cfg.rooms) && cfg.rooms.length) S.rooms = cfg.rooms;
+  const prev = LIGHTS;
+  LIGHTS = (cfg.lights||[]).map(o=>{ const old=prev.find(x=>x.id===o.id);
+    return Object.assign({on:false, bri:50, c:[255,170,90]}, old?{on:old.on, bri:old.bri, c:old.c}:{}, o); });
+  try { const d=JSON.parse(LS.get('ld-device')||'null'); if (d) DEVICE_KEYS.forEach(k=>{ if (d[k]!==undefined) S[k]=d[k]; }); } catch(e) {}
+  S.deskSegsMeasured = true;
+  if (!S.fxTargets) S.fxTargets = LIGHTS.map(l=>l.id);
+  if (!S.lightModes) S.lightModes = {};
+  HUB.synced={}; HUB.lastSent={}; HUB.clkSent=''; HUB.lastSaved = JSON.stringify(hubConfig());
+}
+// what a light should be showing (brightness includes the Mixer's master fader)
+function desiredOf(l){ return {on:!!l.on, bri:Math.max(1, Math.min(100, Math.round(l.bri*S.master/100))), c:l.c.map(v=>Math.round(v))}; }
+async function hubPoll(){
+  if (!HUB.live || !HUB.token) return;
+  try {
+    const st = await hubApi('/api/state'), now = Date.now();
+    let sceneChanged = false;
+    HUB.offline = false;
+    st.lights.forEach(s=>{
+      const l = byId(s.id); if (!l) return;
+      HUB.online[s.id] = s;
+      if (s.ago < 0) return;                                            // not heard from yet
+      if (now - (HUB.touched[s.id]||0) < 2500) return;                  // you just changed it: don't jump back
+      l.on = !!s.on;
+      if (s.bri) l.bri = Math.max(1, Math.min(100, Math.round(s.bri*100/Math.max(1,S.master))));
+      const hasRgb = s.c && (s.c[0]||s.c[1]||s.c[2]);
+      if (l.type!=='clock' && !s.scene && s.temp>0) l.c = kelvinSmooth(s.temp);   // a white (from the remote, WiZ app or night warm)
+      else if (hasRgb && (l.type==='clock' || !s.scene)) l.c = s.c.slice();
+      // a WiZ scene (not our own per-segment slot): show it, and let it take over from any app mode on this lamp
+      const segSlot = (HUB.cfg&&HUB.cfg.segSlot)||258;
+      const wiz = l.type!=='clock' && s.scene>0 && s.scene!==segSlot ? s.scene : 0;
+      if (wiz && wiz!==l.wizScene && S.lightModes[l.id]) delete S.lightModes[l.id];
+      if (s.ext && S.lightModes[l.id]) { delete S.lightModes[l.id]; save(); }    // the remote / WiZ app took the lamp over
+      if (wiz !== (l.wizScene||0)) sceneChanged = true;
+      l.wizScene = wiz;
+      HUB.lastSent[s.id] = desiredOf(l); HUB.synced[s.id] = true;
+    });
+    if (st.clock) applyClockState(st.clock);
+    // a lamp started or left a WiZ scene: redraw so its label shows (not while you're dragging or editing)
+    if (sceneChanged && !dragActive && !document.querySelector('#editorRoot .backdrop, #sheetRoot .backdrop')
+        && !['INPUT','SELECT','TEXTAREA'].includes((document.activeElement||{}).tagName) && !S.editing) render();
+    readouts();
+  } catch(e) { if (HUB.token) HUB.offline = true; }
+  const nt=$('#nettext'); if (nt) nt.textContent = netText();
+  const dot=$('header .dot'); if (dot) dot.style.background = HUB.offline ? 'var(--bad)' : 'var(--good)';
+}
+// The clock's own settings, as the clock's "clk" string (see led_clock_sinric.ino).
+// Two-way: the hub reads the clock's real settings (st.clock) and the app adopts them, so remote
+// presets and the clock's own page show up here. The app sends this string only when YOU change
+// something in the app (it differs from what was last read or sent), never on load.
+const CLOCK_FX_NAMES=['solid','snake','breathe','breathe2','snake2','rainbow','fire','music','dynamic'];
+// The clock's main color and second color, worked out the same way as secondColor() in the clock sketch
+function clockBase(){ const cl=byId('clock'); return S.clock.main ? hex2rgb(S.clock.main) : (cl ? cl.c.slice() : [255,60,0]); }
+function clockSecond(){
+  const C=S.clock;
+  if (C.c2auto===false) return hex2rgb(C.c2||'0040ff');
+  const base=clockBase(), mn=Math.min(...base), shade=C.shade??90;
+  if (mn>150) return hsv(toHS(base)[0]);                          // pale/white main color: a strong version of its hue
+  if (shade>=0) return mix(base,[255,255,255],shade/255);         // lighter: mix in white
+  return base.map(v=>v*(255+shade)/255);                           // darker: scale down
+}
+function clockClk(){
+  const C=S.clock, m=modeOfLight('clock');
+  const base=['pd='+(C.pd?1:0)];
+  if (C.pd) base.push('dc0='+C.dc[0],'dc1='+C.dc[1],'dc2='+C.dc[2],'dc3='+C.dc[3],'colon='+C.colon);
+  base.push('h24='+(C.h24?1:0),'lead='+(C.lead?1:0),'blink='+(C.blink?1:0),'speed='+C.speed,
+            'trans='+({none:0,wipe:1,melt:2}[C.trans]??1),'afx='+(C.alarmFx?1:0));
+  if (C.c2auto===false) base.push('c2auto=0','c2='+(C.c2||'0040ff'));
+  else base.push('c2auto=1','shade='+(C.shade??90));
+  const D=S.sched.dim; base.push('ndon='+(D.on?1:0),'ndf='+hhmmToMin(D.from),'ndt='+hhmmToMin(D.to),'ndl='+D.lvl);   // clock night dim (Schedule tab)
+  const qfx = clockQuickFx();
+  if (m) base.push('mode=8','dpal='+m.pal.join(','),'dgrad='+({flow:1,shooting:2,sparkle:3,rainbow:4}[m.grad]||0),
+                   'dloop='+({jump:0,gradual:1,pulse:2}[m.loop]??1),'dspeed='+m.speed);
+  else if (qfx) base.push('mode='+qfx, ...(qfx===7?['mpal='+S.musicPal.join(',')]:[]));
+  else base.push('mode='+Math.max(0, CLOCK_FX_NAMES.indexOf(C.fx)));
+  return base.join('&');
+}
+// A quick effect that includes the clock -> the clock's own matching animation (it animates itself)
+function clockQuickFx(){ if (!S.fx || !S.fxTargets.includes('clock') || modeOfLight('clock')) return 0;
+  return {fade:5, candle:6, breathe:2, music:7}[S.fx] || 0; }
+const hhmmToMin = s => { const [h,m]=(s||'0:0').split(':').map(Number); return (h*60+m)%1440; };
+const minToHHMM = n => String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
+// Adopt what the clock is really doing (unless you changed a clock setting in the last few seconds)
+function applyClockState(k){
+  if (!k || typeof k!=='object') return;
+  if (Date.now() - (HUB.clkTouched||0) < 4000) return;
+  const C=S.clock;
+  C.pd = !!k.pd;
+  if (C.pd && Array.isArray(k.dc) && k.dc.length>=4) C.dc = k.dc.slice(0,4);
+  else if (k.color) C.dc = [k.color,k.color,k.color,k.color];
+  if (k.colon) C.colon = k.colon;
+  C.h24=!!k.h24; C.lead=!!k.lead; C.blink=!!k.blink; C.alarmFx=!!k.afx;
+  if (k.speed) C.speed = k.speed;
+  C.trans = ['none','wipe','melt'][k.trans] || 'wipe';
+  if (k.color) C.main = k.color;
+  C.c2auto = !!k.c2auto; if (k.c2) C.c2 = k.c2; if (typeof k.shade==='number') C.shade = k.shade;
+  if (clockQuickFx()) { /* a quick effect is driving the clock's animation: keep your own clock animation choice */ }
+  else if (k.mode===8) { if (!S.lightModes.clock) C.fx='dynamic'; }       // a dynamic look from a remote preset
+  else { C.fx = CLOCK_FX_NAMES[k.mode] || 'solid'; if (S.lightModes.clock) delete S.lightModes.clock; }
+  if (typeof k.ndon==='number') S.sched.dim = {on:!!k.ndon, from:minToHHMM(k.ndf||0), to:minToHHMM(k.ndt||0), lvl:k.ndl||10};
+  HUB.clkSent = clockClk(); HUB.clockKnown = true;
+  if (S.tab==='clock' && !document.querySelector('#editorRoot .backdrop, #sheetRoot .backdrop') && !['INPUT','SELECT'].includes((document.activeElement||{}).tagName)) render();
+}
+// Send whatever differs from what each light last got (runs 6-7 times a second)
+function hubSync(){
+  if (!HUB.live || !HUB.token) return;
+  LIGHTS.forEach(l=>{
+    if (!HUB.synced[l.id]) return;
+    const d=desiredOf(l), p=HUB.lastSent[l.id]||{}, patch={};
+    if (d.on!==p.on) patch.on=d.on;
+    if (d.on && d.bri!==p.bri) patch.bri=d.bri;
+    const cChanged = !p.c || d.c.some((v,i)=>v!==p.c[i]);
+    if (d.on && cChanged) { patch.c=d.c; l.wizScene=0; }     // picking a color takes the lamp out of a WiZ scene
+    if (!Object.keys(patch).length) return;
+    if (l.type==='clock' && patch.c) { const h=rgb2hex(d.c); S.clock.dc=[h,h,h,h]; S.clock.pd=false; S.clock.main=h; HUB.clkSent=clockClk(); }   // a single clock color = all digits (the clock does this itself)
+    HUB.touched[l.id]=Date.now(); HUB.lastSent[l.id]=d;
+    hubApi('/api/set', Object.assign({id:l.id}, patch)).catch(()=>{});
+  });
+  const clock = byId('clock');
+  if (clock && HUB.synced.clock && HUB.clockKnown) {          // only after we've read the clock's real settings
+    const clk = clockClk();
+    if (clk!==HUB.clkSent) { HUB.clkSent=clk; HUB.clkTouched=Date.now(); hubApi('/api/set', {id:'clock', clk}).catch(()=>{}); }
+    const left = Math.max(0, Math.round((S.sched.sleepEnd-Date.now())/1000));
+    const want = left>0 ? S.sched.sleepEnd : 0;
+    if (want!==HUB.sleepSent) { HUB.sleepSent=want; hubApi('/api/set', {id:'clock', clk:'timer='+left}).catch(()=>{}); }
+  }
+}
+function netText(){
+  if (!HUB.live) return `Hub at 10.73.24.117 · ${LIGHTS.length} of ${LIGHTS.length} lights answering`;
+  if (HUB.offline) return HUB.remote ? `Can't reach your hub through the relay` : `Can't reach the hub at ${location.host}`;
+  const n = LIGHTS.filter(l=>HUB.online[l.id] && HUB.online[l.id].online).length;
+  return `${HUB.remote ? 'Away from home · via relay' : 'Hub at '+location.host} · ${n} of ${LIGHTS.length} lights answering`;
+}
+function lightStatus(l){
+  const s = HUB.online[l.id]; if (!HUB.live) return '';
+  if (!s) return ' · checking…';
+  if (!s.macOk) return ' · wrong device at this IP ('+s.seenMac+')';
+  return s.online ? ' · answering'+(l.wizScene?' · '+wizSceneInfo(l.wizScene).n:'') : (s.ago<0 ? ' · not heard yet' : ' · not answering');
+}
+const LIVE_NOTE_MODES = '<div class="livenote">Modes and effects run on the hub, so they keep going with your phone locked or this page closed. Using the WiZ remote or WiZ app on a lamp takes it out of the effect.</div>';
+const LIVE_NOTE_SCHED = '<div class="livenote">The hub keeps these running on its own, even with your phone off.</div>';
+
+// Phone-mic beat detection for Music sync. Browsers only allow the mic on HTTPS pages (and localhost),
+// so this runs on the online copy of the app; on the hub's own http:// page the hub keeps its own tempo.
+const MIC = { stream:null, ctx:null, an:null, buf:null, avg:0, last:0, raf:0 };
+function micWanted(){ return HUB.live && window.isSecureContext && S.fx==='music' && S.musicSrc==='phone' && !!navigator.mediaDevices; }
+async function micUpdate(){
+  if (micWanted() && !MIC.stream) {
+    try {
+      MIC.stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+      MIC.ctx = new (window.AudioContext||window.webkitAudioContext)();
+      MIC.an = MIC.ctx.createAnalyser(); MIC.an.fftSize = 1024; MIC.buf = new Float32Array(MIC.an.fftSize);
+      MIC.ctx.createMediaStreamSource(MIC.stream).connect(MIC.an);
+      const loop = () => {
+        if (!MIC.an) return;
+        MIC.an.getFloatTimeDomainData(MIC.buf);
+        let e=0; for (let i=0;i<MIC.buf.length;i++) e+=MIC.buf[i]*MIC.buf[i];
+        const rms = Math.sqrt(e/MIC.buf.length), now = performance.now();
+        MIC.avg = MIC.avg ? MIC.avg*0.97 + rms*0.03 : rms;
+        const k = 1.7 - (S.sens/100)*0.7;                              // more sensitive = lower threshold
+        if (rms > MIC.avg*k && rms > 0.01 && now-MIC.last > 240) {
+          MIC.last = now; const lvl = Math.min(100, Math.round(rms/MIC.avg*40));
+          beat.last = now/1000; beat.idx++;                          // the app's own preview pulses too
+          hubApi('/api/beat',{lvl}).catch(()=>{});
+        }
+        MIC.raf = requestAnimationFrame(loop);
+      };
+      loop();
+    } catch(e) { toast('Couldn\'t use the microphone. Allow it in the browser, or the hub keeps its own tempo.'); S.musicSrc='panel'; }
+  } else if (!micWanted() && MIC.stream) {
+    cancelAnimationFrame(MIC.raf); MIC.stream.getTracks().forEach(t=>t.stop()); try { MIC.ctx.close(); } catch(e) {}
+    Object.assign(MIC, {stream:null, ctx:null, an:null, buf:null, avg:0});
+  }
+}
+
+// Settings → Away from home (at home only): the relay login on the hub, and setup links for devices
+async function wireRemoteCard(){
+  const st=$('#rm-stat'), on=$('#rm-on'); if (!st) return;
+  let info=null;
+  const refresh = async () => {
+    try { info = await hubApi('/api/remote'); } catch(e) { st.textContent='Couldn\'t read the hub\'s settings'; return; }
+    on.setAttribute('aria-checked', !!info.enabled);
+    if (document.activeElement!==$('#rm-host')) $('#rm-host').value = info.host||'';
+    if (document.activeElement!==$('#rm-user')) $('#rm-user').value = info.user||'';
+    $('#rm-pass').placeholder = info.hasPass ? 'Relay password (saved; leave empty to keep it)' : 'Relay password';
+    st.textContent = !info.enabled ? 'Off' : info.connected ? `Connected · hub ${info.hubId}` : 'Connecting to the relay…';
+  };
+  on.onclick = () => on.setAttribute('aria-checked', on.getAttribute('aria-checked')!=='true');
+  $('#rm-save').onclick = async () => {
+    const body = {enabled: on.getAttribute('aria-checked')==='true', host:$('#rm-host').value.trim(), user:$('#rm-user').value.trim()};
+    if ($('#rm-pass').value) body.pass = $('#rm-pass').value;
+    try { await hubApi('/api/remote', body); $('#rm-pass').value=''; toast(body.enabled?'Saved. The hub is connecting to the relay…':'Remote access off'); setTimeout(refresh, 4000); }
+    catch(x) { toast(x&&x.error ? x.error[0].toUpperCase()+x.error.slice(1) : 'Couldn\'t save'); }
+  };
+  $('#rm-url').onchange = e => { S.onlineUrl = e.target.value.trim(); save(); };
+  $('#rm-link').onclick = async () => {
+    await refresh();
+    const url = (S.onlineUrl||'').trim();
+    if (!/^https:\/\//.test(url)) { toast('Enter the online app address first (it starts with https://)'); return; }
+    if (!info || !info.enabled || !info.setup || !info.setup.h) { toast('Turn on remote access and save the relay login first'); return; }
+    const blob = btoa(JSON.stringify(info.setup)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    const link = url.replace(/#.*$/,'') + '#r=' + blob;
+    $('#rm-linktext').value = link; $('#rm-open').href = link; $('#rm-linkbox').hidden = false;
+  };
+  $('#rm-copy').onclick = () => { const t=$('#rm-linktext'); navigator.clipboard.writeText(t.value).then(()=>toast('Link copied'), ()=>{ t.select(); toast('Select and copy the link'); }); };
+  refresh();
+}
+
+async function hubRefreshDevices(){
+  try { HUB.devices = await hubApi('/api/devices'); } catch(e) { return; }
+  const box=$('#devlist'); if (!box) return;
+  box.innerHTML = HUB.devices.map(dv=>`<div class="row"><span><b>${dv.name.replace(/</g,'&lt;')}</b> <span class="hint">${dv.me?'This device':'Last used '+(dv.last?new Date(dv.last*1000).toLocaleDateString():'a while ago')}</span></span>${dv.me?`<button class="btn small" data-hsignout="1">Sign out</button>`:`<button class="btn small danger" data-hremove="${dv.i}">Remove</button>`}</div>`).join('');
+  box.querySelectorAll('[data-hremove]').forEach(b=>b.onclick=async()=>{ try { await hubApi('/api/devices/remove',{i:+b.dataset.hremove}); toast('Device signed out'); hubRefreshDevices(); } catch(e) { toast('Couldn\'t remove it'); } });
+  box.querySelectorAll('[data-hsignout]').forEach(b=>b.onclick=()=>{ hubApi('/api/logout',{}).catch(()=>{}).finally(hubSignedOut); });
+}
+
+/* ===================== password lock =====================
+   Real hub: the password is set during first setup, the hub stores only a salted hash, and each
+   signed-in device gets a random token (remembered on that device) that every request must carry.
+   Demo: the password hash and "signed in" flag live in this browser only. */
+const LS = { get(k){ try { return localStorage.getItem(k); } catch(e) { return null; } },
+             set(k,v){ try { localStorage.setItem(k,v); } catch(e) {} },
+             del(k){ try { localStorage.removeItem(k); } catch(e) {} } };
+async function passHash(p){
+  try { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('lightdeck-demo:'+p));
+        return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+  catch(e) { let h=0; for (const ch of p) h=(h*31+ch.charCodeAt(0))|0; return 'x'+h; }
+}
+const pwField = (id, label, auto) => `<div class="pwrow"><input type="password" id="${id}" aria-label="${label}" placeholder="${label}" autocomplete="${auto}" minlength="8" required><button type="button" data-peek="${id}">Show</button></div>`;
+// Live sign-in against the hub (create the password only if the hub has none and its setup window is open)
+async function showLockLive(){
+  const L=$('#lock');
+  try { await detectHub(); } catch(e) {}
+  const st = HUB.status || {}, creating = !st.hasPassword, closed = creating && !st.setupOpen;
+  L.innerHTML = `<form id="lockform" novalidate>
+    <div class="lk"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+    <h1>Light Deck</h1>
+    <span class="hint">${closed ? 'The hub has no password yet, and its 10-minute setup window has closed. Hold BOOT on the hub for 2–8 s, join the Light-Deck-Setup hotspot and set the password there, or unplug the hub and plug it back in.'
+      : creating ? 'Create the password for your lights. Anyone on MyDevices can reach the hub, so this keeps other people out. Each phone or laptop asks for it once.'
+      : 'Enter your password to use the lights on this device. Each phone or laptop asks for it once.'}</span>
+    ${closed?'':pwField('lp1', creating?'New password (8+ characters)':'Password', creating?'new-password':'current-password')}
+    ${creating&&!closed?pwField('lp2','Type it again','new-password'):''}
+    <div class="err" id="lerr" role="alert"></div>
+    ${closed?'<button class="btn" type="button" id="lretry">Check again</button>':`<button class="btn primary" type="submit">${creating?'Create password':'Sign in'}</button>`}
+    <span class="hint">Hub ${st.ip||location.host} · MAC ${st.mac||'?'}${creating?'':'. Forgot the password? Hold BOOT on the hub for 10+ s, then set a new one in its setup hotspot.'}</span>
+  </form>`;
+  L.hidden=false;
+  L.querySelectorAll('[data-peek]').forEach(b=>b.onclick=()=>{ const i=$('#'+b.dataset.peek); i.type=i.type==='password'?'text':'password'; b.textContent=i.type==='password'?'Show':'Hide'; });
+  const retry=$('#lretry'); if (retry) { retry.onclick=showLockLive; return; }
+  $('#lp1').focus();
+  $('#lockform').onsubmit = async e => {
+    e.preventDefault(); const p1=$('#lp1').value, err=$('#lerr'); err.textContent='';
+    if (creating) {
+      if (p1.length<8) { err.textContent='Use at least 8 characters.'; return; }
+      if (p1!==$('#lp2').value) { err.textContent='The two passwords don\'t match. Type them again.'; return; }
+    }
+    try {
+      const r = await hubApi(creating?'/api/setup':'/api/login', {password:p1});
+      HUB.token = r.token; LS.set('ld_token', r.token);
+      await hubLoad();
+      L.hidden=true; L.innerHTML=''; boot(); toast(creating?'Password set. This device is signed in.':'Signed in');
+    } catch(x) { err.textContent = x&&x.error ? x.error[0].toUpperCase()+x.error.slice(1)+'.' : 'Can\'t reach the hub. Check you\'re on MyDevices.'; $('#lp1').select(); }
+  };
+}
+function showLock(){
+  if (HUB.remote) return showLockRemote();
+  if (HUB.live) return showLockLive();
+  const creating = !LS.get('ld-pass'), L=$('#lock');
+  L.innerHTML = `<form id="lockform" novalidate>
+    <div class="lk"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+    <h1>Light Deck</h1>
+    <span class="hint">${creating
+      ? 'Create a password for your lights. Anyone on MyDevices can reach the hub, so this keeps other people out. Each phone or laptop asks for it once, then remembers it.'
+      : 'Enter your password to use the lights on this device. It\'s only asked once per device.'}</span>
+    ${pwField('lp1', creating?'New password (8+ characters)':'Password', creating?'new-password':'current-password')}
+    ${creating?pwField('lp2','Type it again','new-password'):''}
+    <div class="err" id="lerr" role="alert"></div>
+    <button class="btn primary" type="submit">${creating?'Create password':'Unlock'}</button>
+    <span class="hint">${creating?'Don\'t reuse an important password: on school Wi-Fi, the hub\'s own page isn\'t encrypted.':'Forgot it? Hold BOOT on the hub for 2–8 s to reset the password from its setup hotspot.'}</span>
+    <span class="demo" style="align-self:flex-start">demo: stored in this browser only</span>
+  </form>`;
+  L.hidden=false;
+  L.querySelectorAll('[data-peek]').forEach(b=>b.onclick=()=>{ const i=$('#'+b.dataset.peek); i.type=i.type==='password'?'text':'password'; b.textContent=i.type==='password'?'Show':'Hide'; });
+  $('#lp1').focus();
+  $('#lockform').onsubmit = async e => {
+    e.preventDefault(); const p1=$('#lp1').value, err=$('#lerr');
+    if (creating) {
+      if (p1.length<8) { err.textContent='Use at least 8 characters.'; return; }
+      if (p1!==$('#lp2').value) { err.textContent='The two passwords don\'t match. Type them again.'; return; }
+      LS.set('ld-pass', await passHash(p1));
+    } else if (await passHash(p1)!==LS.get('ld-pass')) {
+      err.textContent='That password isn\'t right. Try again.'; $('#lp1').select(); return;
+    }
+    LS.set('ld-session','1'); L.hidden=true; L.innerHTML=''; boot(); toast(creating?'Password set. This device is signed in.':'Signed in');
+  };
+}
+let booted=false, ticking=false;
+function boot(){
+  if (booted) { render(); return; }
+  booted=true; render();
+  if (!ticking) { ticking=true; requestAnimationFrame(tick); }
+  // away from home: check every 2.5 s instead of every second (the relay's free plan has a monthly data limit)
+  if (HUB.live) { hubPoll(); HUB.timers.push(setInterval(hubPoll, HUB.remote?2500:1000), setInterval(hubSync, HUB.remote?300:150), setInterval(micUpdate, 1000)); }
+}
+(async () => {
+  HUB.live = await detectHub();
+  if (!HUB.live) {
+    // the online copy: a "Set up a device" link (#r=...) stores the relay login on this device
+    const m = location.hash.match(/^#r=([A-Za-z0-9_\-]+)/);
+    if (m) { try { const j=JSON.parse(atob(m[1].replace(/-/g,'+').replace(/_/g,'/'))); if (j.h && j.id) LS.set('ld-remote', JSON.stringify(j)); } catch(e) {}
+             history.replaceState(null, '', location.pathname + location.search); }
+    RM.cfg = remoteCfg();
+    if (location.protocol==='https:' && (RM.cfg || /github\.io$/.test(location.hostname))) { HUB.live = true; HUB.remote = true; }
+  }
+  if (HUB.remote) {
+    document.body.classList.add('live');
+    const rk = LS.get('ld-rkey');
+    if (!RM.cfg || !rk) return showLock();
+    try { await remoteConnect(); RM.key = await importAesKey(unb64(rk)); HUB.status = await hubApi('/api/status'); await hubLoad(); boot(); }
+    catch(e) { if (e && e.timeout) { LS.del('ld-rkey'); RM.key=null; } showLock(); }
+  } else if (HUB.live) {
+    document.body.classList.add('live');
+    HUB.token = LS.get('ld_token') || '';
+    if (!HUB.token) return showLock();
+    try { await hubLoad(); boot(); } catch(e) { showLock(); }
+  } else {
+    if (LS.get('ld-session')==='1' && LS.get('ld-pass')) boot(); else showLock();
+  }
+})();
+</script>
+
+</body></html>
