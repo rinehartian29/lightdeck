@@ -396,7 +396,7 @@ function palAt(pal, x){ const n=pal.length, y=frac(x)*n, i=Math.floor(y)%n; retu
 // color-loop: what a single-color light (or a gradient light with no gradient effect) shows
 function loopColor(m, t, offset=0){
   const pal=palRgb(m), n=pal.length, x=t*0.22*(m.speed/50)+offset, i=Math.floor(x)%n, f=frac(x);
-  if (m.loop==='jump') return [pal[i],1];
+  if (m.loop==='jump') return [f>.85 ? mix(pal[i],pal[(i+1)%n],(f-.85)/.15) : pal[i], 1];   // jump, with a quick fade
   if (m.loop==='pulse') return [pal[i], .12+.88*Math.sin(Math.PI*f)];
   return [mix(pal[i],pal[(i+1)%n],f),1];
 }
@@ -408,8 +408,9 @@ function gradColor(m, p, t, seed=0){
   if (m.grad==='rainbow') return [hsv((p*360 + t*60*sp)%360), 1];
   if (m.grad==='shooting'){ const head=frac(t*.32*sp+seed*.21), d=frac(head-p), tail=.3;
     return d<tail ? [mix(pal[0], pal[1%pal.length], d/tail), 1-d*2.2] : [pal[1%pal.length], .18]; }
-  if (m.grad==='sparkle'){ const base=palAt(pal,p), tick=Math.floor(t*7*sp), s=hash(Math.floor(p*40)*7.1 + tick*.37 + seed);
-    return s>.84 ? [mix(base,[255,255,255],.55),1] : [base,.45]; }
+  if (m.grad==='sparkle'){ const base=palAt(pal,p), tt=t*2.5*sp, tick=Math.floor(tt), ph=tt-tick, s=hash(Math.floor(p*40)*7.1 + tick*.37 + seed);
+    if (s>.84) { const w=Math.sin(Math.PI*ph); return [mix(base,[255,255,255],.45*w), .45+.55*w]; }   // slow twinkles that fade
+    return [base,.45]; }
   return [pal[0],1];
 }
 // does mode m apply to light l, and how
@@ -427,7 +428,7 @@ const FX = [
   {id:'fade',    name:'Color fade',   d:'All lights drift through hues together', pv:'linear-gradient(90deg,#f33,#fc3,#3f6,#3cf,#93f)'},
   {id:'candle',  name:'Candle',       d:'Warm flicker, out of sync per lamp', pv:'linear-gradient(90deg,#ff7a1a,#ffb347,#ff5a00,#ffa23a)'},
   {id:'breathe', name:'Breathe',      d:'Slow pulse, offset lamp to lamp', pv:'linear-gradient(90deg,#222,#7cd3ff,#222)'},
-  {id:'music',   name:'Music sync',   d:'Pulse and change color on the beat', pv:'repeating-linear-gradient(90deg,#ff3ef0 0 6px,#29f0ff 6px 12px)'},
+  {id:'music',   name:'Music sync',   d:'Brightness follows the music, colors change on the beat', pv:'repeating-linear-gradient(90deg,#ff3ef0 0 6px,#29f0ff 6px 12px)'},
 ];
 let beat = {env:0, idx:0, last:0};
 // music sync color: steps through your palette once per beat; 'offset' spreads lights / positions across it
@@ -450,9 +451,9 @@ function lightAt(l, i, t, p=.5){
   if (S.fx && S.fxTargets.includes(l.id)) {
     const sp=S.speed/50;
     if (S.fx==='fade')    c = hsv((t*18*sp)%360);
-    if (S.fx==='candle')  { const n=noise(t*sp*4+i*9+p*6); c=[255,120+40*n,25]; lv *= .62+.38*n; }
+    if (S.fx==='candle')  { const n=noise(t*sp*1.6+i*9+p*6); c=[255,125+30*n,28]; lv *= .78+.22*n; }   // a calm glow (matches the hub)
     if (S.fx==='breathe') lv *= .22 + .78*(.5+.5*Math.sin(t*sp*1.5 + i*.8));
-    if (S.fx==='music')   { c = musicColor(i + Math.floor(p*S.musicPal.length*.999)); lv *= .2 + .8*beat.env; }
+    if (S.fx==='music')   { c = musicColor(i + Math.floor(p*S.musicPal.length*.999)); lv *= .12 + .88*beat.env; }
   }
   return [c, Math.max(0,Math.min(1,lv))];
 }
@@ -801,7 +802,7 @@ function viewModes(){
   <div class="mgrid" id="modegrid">${S.modes.map(modeCard).join('')}<button class="newmode" id="newmode">+ New mode</button></div>
   <span class="hint">Hold a mode and drag to reorder.</span>
   <div class="sec-h"><h2>Quick effects</h2><span class="hint">Simple effects for any light, run by the hub.</span></div>
-  <div class="fxgrid">${FX.map(f=>`<button class="fx" data-fx="${f.id}" aria-pressed="${S.fx===f.id}"><div class="pv" style="background:${f.id==='music'?musicGrad():f.pv}"></div><b>${f.name}</b><span>${f.id==='music'?'Pulse and step through your colors on the beat':f.d}</span></button>`).join('')}</div>
+  <div class="fxgrid">${FX.map(f=>`<button class="fx" data-fx="${f.id}" aria-pressed="${S.fx===f.id}"><div class="pv" style="background:${f.id==='music'?musicGrad():f.pv}"></div><b>${f.name}</b><span>${f.d}</span></button>`).join('')}</div>
   <div class="grid2">
     <div class="card">
       <span class="label">Quick effects apply to</span>
@@ -822,10 +823,10 @@ function viewModes(){
       <input type="range" id="sens" min="10" max="100" value="${S.sens}" aria-label="Music sensitivity">
       <div class="row"><span>Tempo without the mic</span><b class="num" id="bpmv">${S.bpm||120} BPM</b></div>
       <input type="range" id="bpm" min="60" max="180" value="${S.bpm||120}" aria-label="Tempo when the mic isn't used">
-      <span class="hint" id="micnote">${!HUB.live ? 'Demo: beats are simulated here.'
-        : !window.isSecureContext ? 'The phone mic only works on the online (HTTPS) copy of the app, coming next. Here the hub pulses at the tempo above.'
-        : S.musicSrc==='phone' ? 'Listening to this phone\'s mic while Music sync runs. Without beats for 3 s, the hub falls back to the tempo above.'
-        : 'Panel mic isn\'t installed yet, so the hub pulses at the tempo above.'}</span>
+      ${micAllowedHere() ? `<div class="row"><b class="hint" id="micstat" aria-live="polite">${MIC.status || (MIC.stream?'Listening':'Not listening')}</b><button class="btn small primary" id="micbtn">${MIC.stream?'Stop listening':'Start listening'}</button></div>` : ''}
+      <span class="hint" id="micnote">${!HUB.live ? 'Demo: the lights breathe at the tempo here.'
+        : !window.isSecureContext ? 'The phone mic only works on the online copy of the app (your github.io address). Here the hub breathes the lights smoothly at the tempo above.'
+        : 'Brightness follows how loud the music is, and each beat fades to your next color. With the mic off, the hub breathes the lights at the tempo above. Keep this page open while listening.'}</span>
     </div>
   </div>
   ${wl?`<div class="card">
@@ -959,8 +960,8 @@ function drawClock(ms){
   const bri=Math.sqrt((cl.bri/100)*(S.master/100)), {path,timer}=clockPath(), n=path.length, m=modeOfLight('clock'), useMode=!!m, second=clockSecond();
   path.forEach((led,k)=>{
     if(!led.lit) return;
-    const base = timer?[255,255,255] : hex2rgb(led.d==='c'?S.clock.colon:S.clock.dc[led.d]);
-    let [c,v] = useMode&&!timer ? gradColor(m,k/(n-1),ms/1000,0) : clockLed(k,n,ms,base,second); v*=bri;
+    const base = hex2rgb(led.d==='c'?S.clock.colon:S.clock.dc[led.d]);       // the countdown uses the clock's colors too
+    let [c,v] = useMode ? gradColor(m,k/(n-1),ms/1000,0) : clockLed(k,n,ms,base,second); v*=bri;
     g.shadowBlur=14*v; g.shadowColor=`rgba(${c.map(Math.round).join(',')},.9)`; g.fillStyle=`rgb(${c.map(x=>Math.round(x*v)).join(',')})`;
     const [x,y]=led.p; g.beginPath(); g.roundRect?g.roundRect(x-L/2,y-L/2,L,L,2):g.rect(x-L/2,y-L/2,L,L); g.fill();
   });
@@ -1225,7 +1226,10 @@ document.addEventListener('click', e => {
   else if (d.pick) { S.sel=d.pick; render(); save(); }
   else if (d.setskin) setSkin(d.setskin);
   else if (d.arm) { S.armed = S.armed.includes(d.arm)? S.armed.filter(x=>x!==d.arm) : [...S.armed,d.arm]; save(); render(); }   // re-render: knob B's job depends on the clock's SEL
-  else if (d.fx!==undefined) { S.fx = d.fx==='null'?null:d.fx; S.lightModes={}; render(); save(); toast(S.fx?FX.find(f=>f.id===S.fx).name+' running':'Stopped'); }
+  else if (d.fx!==undefined) { S.fx = d.fx==='null'?null:d.fx; S.lightModes={};
+    if (S.fx==='music' && S.musicSrc==='phone' && micAllowedHere()) micStart();     // start the mic during this tap (phones require it)
+    render(); save(); toast(S.fx?FX.find(f=>f.id===S.fx).name+' running':'Stopped'); }
+  else if (t.id==='micbtn') { if (MIC.stream) { micStop(); } else { S.musicSrc='phone'; if (S.fx!=='music') { S.fx='music'; S.lightModes={}; save(); } micStart(); render(); } }
   else if (d.runmode) { if (activeModeIds().includes(d.runmode)) { stopMode(d.runmode); toast('Mode stopped'); } else { runMode(d.runmode); toast(`${modeById(d.runmode).name} running`); } render(); save(); }
   else if (d.editmode) openEditor(modeById(d.editmode));
   else if (t.id==='newmode') openEditor(null);
@@ -1446,8 +1450,9 @@ function tick(ms){
   const t=ms/1000;
   if (S.fx==='music' || S.clock.fx==='music') {
     const period=.5, ph=(t%period)/period;
-    if (t-beat.last>=period) { beat.last=t-(t%period); beat.idx++; }
-    beat.env=Math.exp(-ph*5)*(S.sens/100)+.05;
+    if (!MIC.stream && t-beat.last>=period) { beat.last=t-(t%period); beat.idx++; }
+    // preview: the mic's loudness when listening, otherwise a smooth breath (no flashing)
+    beat.env = MIC.stream ? (MIC.loud||0) : .35+.65*(.5+.5*Math.cos(2*Math.PI*ph));
     const m=$('#meter'); if(m) [...m.children].forEach((b,i)=>{ b.style.height=(Math.max(.04,beat.env*(.4+.6*Math.abs(Math.sin(i*1.3+t*6))))*100)+'%'; });
   }
   paint(t);
@@ -1771,34 +1776,65 @@ const LIVE_NOTE_SCHED = '<div class="livenote">The hub keeps these running on it
 
 // Phone-mic beat detection for Music sync. Browsers only allow the mic on HTTPS pages (and localhost),
 // so this runs on the online copy of the app; on the hub's own http:// page the hub keeps its own tempo.
-const MIC = { stream:null, ctx:null, an:null, buf:null, avg:0, last:0, raf:0 };
-function micWanted(){ return HUB.live && window.isSecureContext && S.fx==='music' && S.musicSrc==='phone' && !!navigator.mediaDevices; }
+// Phones only let a page start the mic and audio processing right after a tap, so micStart() runs from
+// the Music sync tile or the Start listening button. micUpdate() (every second) only stops it when it's
+// no longer wanted, and restarts it by itself if this site already has mic permission.
+const MIC = { stream:null, ctx:null, an:null, buf:null, avg:0, last:0, timer:0, beats:0, status:'' };
+function micAllowedHere(){ return HUB.live && window.isSecureContext && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
+function micWanted(){ return micAllowedHere() && S.fx==='music' && S.musicSrc==='phone'; }
+function micSetStatus(s){ MIC.status=s; const n=$('#micstat'); if (n) n.textContent=s; const b=$('#micbtn'); if (b) b.textContent = MIC.stream ? 'Stop listening' : 'Start listening'; }
+async function micStart(){
+  if (MIC.stream || !micAllowedHere()) return;
+  try {
+    micSetStatus('Asking for the microphone…');
+    MIC.ctx = new (window.AudioContext||window.webkitAudioContext)();          // created during the tap
+    if (MIC.ctx.state==='suspended') await MIC.ctx.resume();
+    MIC.stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+    MIC.an = MIC.ctx.createAnalyser(); MIC.an.fftSize = 1024; MIC.buf = new Float32Array(MIC.an.fftSize);
+    MIC.ctx.createMediaStreamSource(MIC.stream).connect(MIC.an);
+    MIC.beats = 0; MIC.peak = 0.02; MIC.loud = 0; MIC.sendAt = 0; MIC.pendingBeat = false;
+    MIC.timer = setInterval(() => {                     // ~40 checks a second
+      if (!MIC.an) return;
+      if (MIC.ctx.state==='suspended') MIC.ctx.resume().catch(()=>{});
+      MIC.an.getFloatTimeDomainData(MIC.buf);
+      let e=0; for (let i=0;i<MIC.buf.length;i++) e+=MIC.buf[i]*MIC.buf[i];
+      const rms = Math.sqrt(e/MIC.buf.length), now = performance.now();
+      // loudness 0..1, relative to the recent loudest moment (so it adapts to how loud the room is)
+      MIC.peak = Math.max(rms, MIC.peak*0.9985, 0.004);
+      const gain = 0.6 + S.sens/100*0.8;                // Sensitivity: how quickly it reaches full brightness
+      const target = Math.min(1, rms/MIC.peak*gain);
+      MIC.loud += (target - MIC.loud) * (target > MIC.loud ? 0.5 : 0.08);   // rises fast, settles slowly
+      // beats (for stepping to the next color)
+      MIC.avg = MIC.avg ? MIC.avg*0.97 + rms*0.03 : rms;
+      const k = 1.7 - (S.sens/100)*0.7;
+      if (rms > MIC.avg*k && rms > 0.008 && now-MIC.last > 300) { MIC.last = now; MIC.beats++; MIC.pendingBeat = true; beat.last = now/1000; beat.idx++; }
+      // send the loudness ~8 times a second (and whether a beat happened)
+      if (now - MIC.sendAt > 125) {
+        MIC.sendAt = now;
+        hubApi('/api/beat',{loud:Math.round(MIC.loud*100), beat:MIC.pendingBeat?1:0}).catch(()=>{});
+        MIC.pendingBeat = false;
+        micSetStatus(`Listening · loudness ${Math.round(MIC.loud*100)}% · ${MIC.beats} beats`);
+      }
+    }, 25);
+    micSetStatus('Listening · play some music');
+  } catch(e) {
+    micStop();
+    micSetStatus(e && e.name==='NotAllowedError'
+      ? 'The microphone is blocked for this site. Allow it in your browser\'s site settings (the icon next to the address), then tap Start listening.'
+      : 'Couldn\'t start the microphone ('+((e&&e.name)||'error')+'). The hub keeps its own tempo meanwhile.');
+  }
+}
+function micStop(){
+  clearInterval(MIC.timer);
+  if (MIC.stream) MIC.stream.getTracks().forEach(t=>t.stop());
+  try { if (MIC.ctx) MIC.ctx.close(); } catch(e) {}
+  Object.assign(MIC, {stream:null, ctx:null, an:null, buf:null, avg:0, timer:0});
+  micSetStatus(micAllowedHere() ? 'Not listening' : '');
+}
 async function micUpdate(){
-  if (micWanted() && !MIC.stream) {
-    try {
-      MIC.stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
-      MIC.ctx = new (window.AudioContext||window.webkitAudioContext)();
-      MIC.an = MIC.ctx.createAnalyser(); MIC.an.fftSize = 1024; MIC.buf = new Float32Array(MIC.an.fftSize);
-      MIC.ctx.createMediaStreamSource(MIC.stream).connect(MIC.an);
-      const loop = () => {
-        if (!MIC.an) return;
-        MIC.an.getFloatTimeDomainData(MIC.buf);
-        let e=0; for (let i=0;i<MIC.buf.length;i++) e+=MIC.buf[i]*MIC.buf[i];
-        const rms = Math.sqrt(e/MIC.buf.length), now = performance.now();
-        MIC.avg = MIC.avg ? MIC.avg*0.97 + rms*0.03 : rms;
-        const k = 1.7 - (S.sens/100)*0.7;                              // more sensitive = lower threshold
-        if (rms > MIC.avg*k && rms > 0.01 && now-MIC.last > 240) {
-          MIC.last = now; const lvl = Math.min(100, Math.round(rms/MIC.avg*40));
-          beat.last = now/1000; beat.idx++;                          // the app's own preview pulses too
-          hubApi('/api/beat',{lvl}).catch(()=>{});
-        }
-        MIC.raf = requestAnimationFrame(loop);
-      };
-      loop();
-    } catch(e) { toast('Couldn\'t use the microphone. Allow it in the browser, or the hub keeps its own tempo.'); S.musicSrc='panel'; }
-  } else if (!micWanted() && MIC.stream) {
-    cancelAnimationFrame(MIC.raf); MIC.stream.getTracks().forEach(t=>t.stop()); try { MIC.ctx.close(); } catch(e) {}
-    Object.assign(MIC, {stream:null, ctx:null, an:null, buf:null, avg:0});
+  if (!micWanted() && MIC.stream) micStop();
+  else if (micWanted() && !MIC.stream && !MIC.status.startsWith('Asking') && navigator.permissions) {
+    try { const p = await navigator.permissions.query({name:'microphone'}); if (p.state==='granted') micStart(); } catch(e) {}
   }
 }
 
