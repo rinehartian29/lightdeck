@@ -817,15 +817,19 @@ function viewModes(){
       <div class="pal">${S.musicPal.map((h,i)=>`<div class="palc"><button class="b" data-mcol="${i}" style="background:#${h}" aria-label="Music color ${i+1}, #${h}">${S.musicPal.length>2?`<span class="x" data-mrem="${i}" role="button" aria-label="Remove music color ${i+1}">×</span>`:''}</button>${i+1}</div>`).join('')}
         ${S.musicPal.length<6?`<div class="palc"><button class="add" id="madd" aria-label="Add a music color">+</button>Add</div>`:''}</div>
       <div class="chips"><button class="chip" id="mknobs">Use knob A and B colors</button></div>
-      <div class="seg" role="group" aria-label="Sound source"><button data-src="phone" aria-pressed="${S.musicSrc==='phone'}">Phone mic</button><button data-src="panel" aria-pressed="${S.musicSrc==='panel'}">Panel mic</button></div>
-      <span class="hint">${S.musicSrc==='phone'?'Uses this phone\'s microphone. Works on the online (HTTPS) copy of the app.':'Needs the INMP441 mic on the panel. Not installed yet, so the hub falls back to the phone mic.'}</span>
+      <div class="seg" role="group" aria-label="Sound source"><button data-src="phone" aria-pressed="${S.musicSrc==='phone'}">Phone mic</button><button data-src="pc" aria-pressed="${S.musicSrc==='pc'}">Laptop audio</button><button data-src="panel" aria-pressed="${S.musicSrc==='panel'}">Panel mic</button></div>
+      <span class="hint">${S.musicSrc==='phone'?'Uses this device\'s microphone. Works on the online (HTTPS) copy of the app.'
+        : S.musicSrc==='pc' ? (pcAudioSupported()
+          ? 'Follows whatever is playing on this laptop, like Spotify, straight from the audio (no mic, no room noise). Use Chrome or Edge on the online copy. Spotify app: share "Entire screen" with "Also share system audio" on. Web player: share its tab with tab audio on.'
+          : 'Laptop audio only works in Chrome or Edge on a computer. Open the online copy there, or use Phone mic on this device.')
+        : 'Needs the INMP441 mic on the panel. Not installed yet, so the hub falls back to the phone mic.'}</span>
       <div class="row"><span>Sensitivity</span><b class="num">${S.sens}%</b></div>
       <input type="range" id="sens" min="10" max="100" value="${S.sens}" aria-label="Music sensitivity">
       <div class="row"><span>Tempo without the mic</span><b class="num" id="bpmv">${S.bpm||120} BPM</b></div>
       <input type="range" id="bpm" min="60" max="180" value="${S.bpm||120}" aria-label="Tempo when the mic isn't used">
       ${micAllowedHere() ? `<div class="row"><b class="hint" id="micstat" aria-live="polite">${MIC.status || (MIC.stream?'Listening':'Not listening')}</b><button class="btn small primary" id="micbtn">${MIC.stream?'Stop listening':'Start listening'}</button></div>` : ''}
       <span class="hint" id="micnote">${!HUB.live ? 'Demo: the lights breathe at the tempo here.'
-        : !window.isSecureContext ? 'The phone mic only works on the online copy of the app (your github.io address). Here the hub breathes the lights smoothly at the tempo above.'
+        : !window.isSecureContext ? 'The phone mic and laptop audio only work on the online copy of the app (your github.io address). Here the hub breathes the lights smoothly at the tempo above.'
         : 'Brightness follows how loud the music is, and each beat fades to your next color. With the mic off, the hub breathes the lights at the tempo above. Keep this page open while listening.'}</span>
     </div>
   </div>
@@ -1227,14 +1231,14 @@ document.addEventListener('click', e => {
   else if (d.setskin) setSkin(d.setskin);
   else if (d.arm) { S.armed = S.armed.includes(d.arm)? S.armed.filter(x=>x!==d.arm) : [...S.armed,d.arm]; save(); render(); }   // re-render: knob B's job depends on the clock's SEL
   else if (d.fx!==undefined) { S.fx = d.fx==='null'?null:d.fx; S.lightModes={};
-    if (S.fx==='music' && S.musicSrc==='phone' && micAllowedHere()) micStart();     // start the mic during this tap (phones require it)
+    if (S.fx==='music' && (S.musicSrc==='phone'||S.musicSrc==='pc') && micAllowedHere()) micStart();     // start listening during this tap (browsers require it)
     render(); save(); toast(S.fx?FX.find(f=>f.id===S.fx).name+' running':'Stopped'); }
-  else if (t.id==='micbtn') { if (MIC.stream) { micStop(); } else { S.musicSrc='phone'; if (S.fx!=='music') { S.fx='music'; S.lightModes={}; save(); } micStart(); render(); } }
+  else if (t.id==='micbtn') { if (MIC.stream) { micStop(); } else { if (S.musicSrc!=='pc') S.musicSrc='phone'; if (S.fx!=='music') { S.fx='music'; S.lightModes={}; save(); } micStart(); render(); } }
   else if (d.runmode) { if (activeModeIds().includes(d.runmode)) { stopMode(d.runmode); toast('Mode stopped'); } else { runMode(d.runmode); toast(`${modeById(d.runmode).name} running`); } render(); save(); }
   else if (d.editmode) openEditor(modeById(d.editmode));
   else if (t.id==='newmode') openEditor(null);
   else if (d.tgt) { S.fxTargets = S.fxTargets.includes(d.tgt)? S.fxTargets.filter(x=>x!==d.tgt):[...S.fxTargets,d.tgt]; t.setAttribute('aria-pressed',S.fxTargets.includes(d.tgt)); save(); }
-  else if (d.src) { S.musicSrc=d.src; render(); save(); }
+  else if (d.src) { if (MIC.stream && MIC.src!==d.src) micStop(); S.musicSrc=d.src; render(); save(); }
   else if (d.wiz) { const l=byId(d.wizl); delete S.lightModes[l.id]; S.fxTargets=S.fxTargets.filter(x=>x!==l.id);
     if (HUB.live) {          // start the lamp's real built-in scene
       l.on=true; l.wizScene=+d.wiz; HUB.touched[l.id]=Date.now();
@@ -1781,19 +1785,38 @@ const LIVE_NOTE_SCHED = '<div class="livenote">The hub keeps these running on it
 // Phones only let a page start the mic and audio processing right after a tap, so micStart() runs from
 // the Music sync tile or the Start listening button. micUpdate() (every second) only stops it when it's
 // no longer wanted, and restarts it by itself if this site already has mic permission.
-const MIC = { stream:null, ctx:null, an:null, buf:null, avg:0, last:0, timer:0, beats:0, status:'' };
-function micAllowedHere(){ return HUB.live && window.isSecureContext && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
-function micWanted(){ return micAllowedHere() && S.fx==='music' && S.musicSrc==='phone'; }
+// Sound sources: 'phone' = this device's microphone; 'pc' = the sound playing on this laptop (Spotify app
+// or web player), captured with screen-share audio (Chrome/Edge on a computer; phones can't do this);
+// 'panel' = the future INMP441 mic on the panel.
+const MIC = { stream:null, ctx:null, an:null, buf:null, avg:0, last:0, timer:0, beats:0, status:'', src:'' };
+function pcAudioSupported(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent); }
+function micAllowedHere(){ return HUB.live && window.isSecureContext && !!(navigator.mediaDevices && (S.musicSrc==='pc' ? pcAudioSupported() : navigator.mediaDevices.getUserMedia)); }
+function micWanted(){ return micAllowedHere() && S.fx==='music' && (S.musicSrc==='phone' || S.musicSrc==='pc'); }
 function micSetStatus(s){ MIC.status=s; const n=$('#micstat'); if (n) n.textContent=s; const b=$('#micbtn'); if (b) b.textContent = MIC.stream ? 'Stop listening' : 'Start listening'; }
 async function micStart(){
   if (MIC.stream || !micAllowedHere()) return;
+  const pc = S.musicSrc==='pc';
   try {
-    micSetStatus('Asking for the microphone…');
+    micSetStatus(pc ? 'Pick what to share: for the Spotify app choose "Entire screen" and turn on "Also share system audio"; for the web player pick its tab and turn on tab audio.' : 'Asking for the microphone…');
     MIC.ctx = new (window.AudioContext||window.webkitAudioContext)();          // created during the tap
     if (MIC.ctx.state==='suspended') await MIC.ctx.resume();
-    MIC.stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+    const clean = {echoCancellation:false, noiseSuppression:false, autoGainControl:false};
+    if (pc) {
+      // Chrome only shares audio together with a screen or tab, so a video track comes along; it isn't used.
+      MIC.stream = await navigator.mediaDevices.getDisplayMedia({video:true, audio:{...clean, suppressLocalAudioPlayback:false},
+        systemAudio:'include', selfBrowserSurface:'exclude', surfaceSwitching:'include'});
+      if (!MIC.stream.getAudioTracks().length) {
+        MIC.stream.getTracks().forEach(t=>t.stop()); MIC.stream = null;
+        throw {name:'NoAudio'};
+      }
+      MIC.stream.getVideoTracks().forEach(t=>{ t.enabled = false; });
+      MIC.stream.getAudioTracks()[0].addEventListener('ended', () => { micStop(); micSetStatus('Sharing stopped. Tap Start listening to pick the audio again.'); });
+    } else {
+      MIC.stream = await navigator.mediaDevices.getUserMedia({audio:clean});
+    }
+    MIC.src = S.musicSrc;
     MIC.an = MIC.ctx.createAnalyser(); MIC.an.fftSize = 1024; MIC.buf = new Float32Array(MIC.an.fftSize);
-    MIC.ctx.createMediaStreamSource(MIC.stream).connect(MIC.an);
+    MIC.ctx.createMediaStreamSource(new MediaStream(MIC.stream.getAudioTracks())).connect(MIC.an);
     MIC.beats = 0; MIC.peak = 0.02; MIC.loud = 0; MIC.sendAt = 0; MIC.pendingBeat = false;
     MIC.timer = setInterval(() => {                     // ~40 checks a second
       if (!MIC.an) return;
@@ -1821,7 +1844,11 @@ async function micStart(){
     micSetStatus('Listening · play some music');
   } catch(e) {
     micStop();
-    micSetStatus(e && e.name==='NotAllowedError'
+    micSetStatus(pc
+      ? (e && e.name==='NoAudio' ? 'No sound was shared. Tap Start listening again and turn on "Also share system audio" (or tab audio) in the share window.'
+        : e && e.name==='NotAllowedError' ? 'Sharing was cancelled. Tap Start listening to try again.'
+        : 'Couldn\'t capture the laptop\'s audio ('+((e&&e.name)||'error')+'). The hub keeps its own tempo meanwhile.')
+      : e && e.name==='NotAllowedError'
       ? 'The microphone is blocked for this site. Allow it in your browser\'s site settings (the icon next to the address), then tap Start listening.'
       : 'Couldn\'t start the microphone ('+((e&&e.name)||'error')+'). The hub keeps its own tempo meanwhile.');
   }
@@ -1830,12 +1857,13 @@ function micStop(){
   clearInterval(MIC.timer);
   if (MIC.stream) MIC.stream.getTracks().forEach(t=>t.stop());
   try { if (MIC.ctx) MIC.ctx.close(); } catch(e) {}
-  Object.assign(MIC, {stream:null, ctx:null, an:null, buf:null, avg:0, timer:0});
+  Object.assign(MIC, {stream:null, ctx:null, an:null, buf:null, avg:0, timer:0, src:''});
   micSetStatus(micAllowedHere() ? 'Not listening' : '');
 }
 async function micUpdate(){
-  if (!micWanted() && MIC.stream) micStop();
-  else if (micWanted() && !MIC.stream && !MIC.status.startsWith('Asking') && navigator.permissions) {
+  if (MIC.stream && (!micWanted() || MIC.src!==S.musicSrc)) micStop();
+  // only the phone mic restarts by itself; sharing laptop audio always needs a tap and the share window
+  else if (micWanted() && S.musicSrc==='phone' && !MIC.stream && !MIC.status.startsWith('Asking') && navigator.permissions) {
     try { const p = await navigator.permissions.query({name:'microphone'}); if (p.state==='granted') micStart(); } catch(e) {}
   }
 }
